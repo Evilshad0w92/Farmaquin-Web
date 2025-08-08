@@ -3,39 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Farmacia Salud Total</title>
+    <meta name="description" content="Farmacia en línea con los mejores productos para tu salud">
+    <title>Farmaquin - Tu farmacia en línea</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <header>
-        <h1>Farmaquin</h1>
-        <nav>
-            <ul>
-                <li><a href="#">Inicio</a></li>
-                <li><a href="#">Productos</a></li>
-                <li><a href="#">Contacto</a></li>
-            </ul>
-        </nav>
+    <header class="main-header">
+        <div class="header-container">
+            <h1>Farmaquin</h1>
+            <nav aria-label="Navegación principal">
+                <ul class="nav-list">
+                    <li><a href="#" aria-current="page">Inicio</a></li>
+                    <li><a href="#productos">Productos</a></li>
+                    <li><a href="#contacto">Contacto</a></li>
+                    <li id="auth-link" class="hidden">
+                        <a href="#admin" id="admin-link">Administración</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
     </header>
     
-    <main>
-        <section class="hero">
-            <h2>Bienvenido a nuestra farmacia</h2>
-            <p>Tu salud es nuestra prioridad</p>
-        </section>
-        
-        <section class="productos">
-            <h2>Productos Destacados</h2>
-            <div id="lista-productos" class="grid-container">
-                <!-- Los productos se cargarán con JavaScript -->
+    <main class="main-content">
+        <section class="hero" aria-labelledby="hero-heading">
+            <div class="hero-content">
+                <h2 id="hero-heading">Bienvenido a nuestra farmacia</h2>
+                <p class="hero-text">Tu salud es nuestra prioridad</p>
             </div>
         </section>
+
+        <section id="auth-section" class="auth-section hidden">
+            <div id="login-container" class="auth-form">
+                <h2 class="form-title">Iniciar sesión</h2>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-email">Correo electrónico</label>
+                        <input type="email" id="login-email" required aria-required="true">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Contraseña</label>
+                        <input type="password" id="login-password" required aria-required="true">
+                    </div>
+                    <button type="submit" class="btn-primary">Ingresar</button>
+                </form>
+            </div>
+
+            <div id="admin-panel" class="admin-panel hidden">
+                <h2 class="panel-title">Panel de Administración</h2>
+                <form id="product-form" class="product-form">
+                    <div class="form-group">
+                        <label for="producto-nombre">Nombre</label>
+                        <input type="text" id="producto-nombre" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="producto-descripcion">Descripción</label>
+                        <textarea id="producto-descripcion" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="producto-precio">Precio</label>
+                        <input type="number" id="producto-precio" min="0" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="producto-categoria">Categoría</label>
+                        <input type="text" id="producto-categoria" required>
+                    </div>
+                    <button type="submit" class="btn-primary">Agregar Producto</button>
+                </form>
+                <button id="logout-btn" class="btn-secondary">Cerrar sesión</button>
+            </div>
+        </section>
+        
+        <section id="productos" class="product-section" aria-labelledby="productos-heading">
+            <div class="search-container">
+                <form id="search-form" role="search">
+                    <label for="buscar-producto" class="sr-only">Buscar productos</label>
+                    <input type="text" id="buscar-producto" placeholder="Buscar productos...">
+                    <button type="submit" class="search-btn">Buscar</button>
+                </form>
+            </div>
+            
+            <h2 id="productos-heading">Productos Destacados</h2>
+            <div id="lista-productos" class="product-grid">
+                <p class="loading-text">Cargando productos...</p>
+            </div>
+        </section>
+
+        <aside id="carrito" class="cart-container" aria-labelledby="cart-heading">
+            <h3 id="cart-heading">Tu Carrito <span id="cart-count"></span></h3>
+            <div id="items-carrito" class="cart-items"></div>
+            <div class="cart-summary">
+                <p>Total: $<span id="total-carrito">0.00</span></p>
+                <button id="checkout-btn" class="btn-primary">Finalizar Compra</button>
+            </div>
+        </aside>
     </main>
     
-    <footer>
-        <p>© 2023 Farmaquin. Todos los derechos reservados.</p>
+    <footer class="main-footer">
+        <div class="footer-content">
+            <p>© <span id="current-year"></span> Farmaquin. Todos los derechos reservados.</p>
+        </div>
     </footer>
     
-    <script src="script.js"></script>
+    <!-- Firebase App (configuración básica) -->
+    <script type="module" src="firebase-config.js"></script>
+    
+    <!-- Aplicación principal -->
+    <script type="module" src="app.js"></script>
 </body>
 </html>

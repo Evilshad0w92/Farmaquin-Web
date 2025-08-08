@@ -53,3 +53,23 @@ footer {
     padding: 1rem;
     margin-top: 1rem;
 }
+
+#carrito-container {
+    position: fixed;
+    right: 20px;
+    top: 20px;
+    background: white;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    width: 250px;
+}
+
+.item-carrito {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+}

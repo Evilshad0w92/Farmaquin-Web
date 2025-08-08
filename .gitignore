@@ -1,0 +1,12 @@
+# Archivos de entorno
+.env
+.env.local
+.env.*.local
+
+# Dependencias
+node_modules/
+
+# Entornos de desarrollo
+dist/
+.vscode/
+.idea/
