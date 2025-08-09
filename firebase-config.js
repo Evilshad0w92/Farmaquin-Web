@@ -1,62 +1,37 @@
-// Importaciones corregidas
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { 
-  getFirestore,
-  collection,
-  getDocs,
-  addDoc,
-  doc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  writeBatch,
-  increment,
-  Timestamp
-} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { 
-  getAuth,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+// Versión compatible con producción usando CDN
+const loadFirebase = async () => {
+  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js');
+  const { 
+    getFirestore, collection, getDocs, addDoc, doc, updateDoc, 
+    deleteDoc, query, where, orderBy, writeBatch, increment, Timestamp 
+  } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+  const { 
+    getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged 
+  } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js');
 
-// Tu configuración de Firebase
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  const firebaseConfig = {
+    apiKey: "tu-api-key",
+    authDomain: "tu-proyecto.firebaseapp.com",
+    projectId: "tu-proyecto",
+    storageBucket: "tu-proyecto.appspot.com",
+    messagingSenderId: "tu-messaging-sender-id",
+    appId: "tu-app-id",
+    measurementId: "tu-measurement-id"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  return {
+    db,
+    auth,
+    // Firestore
+    collection, getDocs, addDoc, doc, updateDoc, deleteDoc,
+    query, where, orderBy, writeBatch, increment, Timestamp,
+    // Auth
+    signInWithEmailAndPassword, signOut, onAuthStateChanged
+  };
 };
 
-// Inicialización
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-
-// Exporta solo lo necesario
-export { 
-  db, 
-  auth,
-  // Funciones de Firestore
-  collection,
-  getDocs,
-  addDoc,
-  doc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  writeBatch,
-  increment,
-  Timestamp,
-  // Funciones de Auth
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged 
-};
+export default loadFirebase;
