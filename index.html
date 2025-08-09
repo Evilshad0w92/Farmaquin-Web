@@ -3,111 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Farmacia en línea con los mejores productos para tu salud">
-    <title>Farmaquin - Tu farmacia en línea</title>
+    <title>Punto de Venta - Farmaquin</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:,">
 </head>
 <body>
     <header class="main-header">
         <div class="header-container">
-            <h1>Farmaquin</h1>
-            <nav aria-label="Navegación principal">
+            <h1>Farmaquin - Punto de Venta</h1>
+            <nav>
                 <ul class="nav-list">
-                    <li><a href="#" aria-current="page">Inicio</a></li>
-                    <li><a href="#productos">Productos</a></li>
-                    <li><a href="#contacto">Contacto</a></li>
+                    <li><a href="#" id="nav-inventario">Inventario</a></li>
+                    <li><a href="#" id="nav-ventas">Punto de Venta</a></li>
+                    <li><a href="#" id="nav-registros">Registros</a></li>
                     <li id="auth-link" class="hidden">
-                        <a href="#admin" id="admin-link">Administración</a>
+                        <a href="#" id="logout-btn">Cerrar sesión</a>
                     </li>
                 </ul>
             </nav>
         </div>
     </header>
-    
-    <main class="main-content">
-        <section class="hero" aria-labelledby="hero-heading">
-            <div class="hero-content">
-                <h2 id="hero-heading">Bienvenido a nuestra farmacia</h2>
-                <p class="hero-text">Tu salud es nuestra prioridad</p>
-            </div>
-        </section>
 
-        <section id="auth-section" class="auth-section hidden">
-            <div id="login-container" class="auth-form">
-                <h2 class="form-title">Iniciar sesión</h2>
+    <main class="main-content">
+        <!-- Sección de Login -->
+        <section id="login-section" class="auth-section">
+            <div class="auth-form">
+                <h2>Iniciar Sesión</h2>
                 <form id="login-form">
                     <div class="form-group">
                         <label for="login-email">Correo electrónico</label>
-                        <input type="email" id="login-email" required aria-required="true">
+                        <input type="email" id="login-email" required>
                     </div>
                     <div class="form-group">
                         <label for="login-password">Contraseña</label>
-                        <input type="password" id="login-password" required aria-required="true">
+                        <input type="password" id="login-password" required>
                     </div>
                     <button type="submit" class="btn-primary">Ingresar</button>
                 </form>
             </div>
-
-            <div id="admin-panel" class="admin-panel hidden">
-                <h2 class="panel-title">Panel de Administración</h2>
-                <form id="product-form" class="product-form">
-                    <div class="form-group">
-                        <label for="producto-nombre">Nombre</label>
-                        <input type="text" id="producto-nombre" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="producto-descripcion">Descripción</label>
-                        <textarea id="producto-descripcion" required></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="producto-precio">Precio</label>
-                        <input type="number" id="producto-precio" min="0" step="0.01" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="producto-categoria">Categoría</label>
-                        <input type="text" id="producto-categoria" required>
-                    </div>
-                    <button type="submit" class="btn-primary">Agregar Producto</button>
-                </form>
-                <button id="logout-btn" class="btn-secondary">Cerrar sesión</button>
-            </div>
         </section>
-        
-        <section id="productos" class="product-section" aria-labelledby="productos-heading">
-            <div class="search-container">
-                <form id="search-form" role="search">
-                    <label for="buscar-producto" class="sr-only">Buscar productos</label>
-                    <input type="text" id="buscar-producto" placeholder="Buscar productos...">
-                    <button type="submit" class="search-btn">Buscar</button>
-                </form>
+
+        <!-- Sección de Inventario -->
+        <section id="inventario" class="inventory-section hidden">
+            <div class="section-header">
+                <h2>Inventario de Productos</h2>
+                <button id="show-add-product" class="btn-primary">+ Agregar Producto</button>
             </div>
             
-            <h2 id="productos-heading">Productos Destacados</h2>
-            <div id="lista-productos" class="product-grid">
-                <p class="loading-text">Cargando productos...</p>
+            <div class="search-container">
+                <input type="text" id="search-product" placeholder="Buscar productos...">
+            </div>
+            
+            <div id="lista-productos" class="product-grid"></div>
+        </section>
+
+        <!-- Formulario para agregar producto -->
+        <section id="add-product-section" class="add-product-section hidden">
+            <h2>Agregar Nuevo Producto</h2>
+            <form id="product-form" class="product-form">
+                <div class="form-group">
+                    <label for="producto-nombre">Nombre:</label>
+                    <input type="text" id="producto-nombre" required>
+                </div>
+                <div class="form-group">
+                    <label for="producto-precio">Precio:</label>
+                    <input type="number" id="producto-precio" min="0" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="producto-stock">Stock:</label>
+                    <input type="number" id="producto-stock" min="0" required>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Guardar</button>
+                    <button type="button" id="cancel-add-product" class="btn-secondary">Cancelar</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Modal para editar producto -->
+        <div id="edit-product-modal" class="modal hidden">
+            <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <h2>Editar Producto</h2>
+                <form id="edit-product-form">
+                    <input type="hidden" id="edit-product-id">
+                    <div class="form-group">
+                        <label for="edit-product-name">Nombre:</label>
+                        <input type="text" id="edit-product-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-product-price">Precio:</label>
+                        <input type="number" id="edit-product-price" min="0" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-product-stock">Stock:</label>
+                        <input type="number" id="edit-product-stock" min="0" required>
+                    </div>
+                    <button type="submit" class="btn-primary">Guardar Cambios</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sección de Punto de Venta -->
+        <section id="punto-venta" class="pos-section hidden">
+            <h2>Punto de Venta</h2>
+            <div class="sale-container">
+                <div class="sale-products">
+                    <div class="search-container">
+                        <input type="text" id="search-sale-product" placeholder="Buscar productos...">
+                    </div>
+                    <div id="sale-product-list" class="sale-product-list"></div>
+                </div>
+                <div class="sale-cart">
+                    <h3>Venta Actual</h3>
+                    <div id="sale-items" class="sale-items"></div>
+                    <div class="sale-total">
+                        <p>Total: $<span id="sale-total-amount">0.00</span></p>
+                        <button id="complete-sale" class="btn-primary">Finalizar Venta</button>
+                    </div>
+                </div>
             </div>
         </section>
 
-        <aside id="carrito" class="cart-container" aria-labelledby="cart-heading">
-            <h3 id="cart-heading">Tu Carrito <span id="cart-count"></span></h3>
-            <div id="items-carrito" class="cart-items"></div>
-            <div class="cart-summary">
-                <p>Total: $<span id="total-carrito">0.00</span></p>
-                <button id="checkout-btn" class="btn-primary">Finalizar Compra</button>
+        <!-- Sección de Registros de Ventas -->
+        <section id="registros-ventas" class="sales-section hidden">
+            <h2>Registro de Ventas</h2>
+            <div class="search-container">
+                <input type="text" id="search-sale" placeholder="Buscar ventas...">
             </div>
-        </aside>
+            <div id="sales-list" class="sales-list"></div>
+        </section>
     </main>
-    
+
     <footer class="main-footer">
         <div class="footer-content">
-            <p>© <span id="current-year"></span> Farmaquin. Todos los derechos reservados.</p>
+            <p>© <span id="current-year"></span> Farmaquin - Sistema de Punto de Venta</p>
         </div>
     </footer>
-    
-    <!-- Firebase App (configuración básica) -->
+
     <script type="module" src="firebase-config.js"></script>
-    
-    <!-- Aplicación principal -->
     <script type="module" src="app.js"></script>
 </body>
 </html>

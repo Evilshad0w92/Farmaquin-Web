@@ -1,10 +1,26 @@
-// Importaciones de Firebase
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
-import { getAnalytics } from "firebase/analytics";
+import { 
+  getFirestore,
+  collection,
+  getDocs,
+  addDoc,
+  doc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,       // <- Añade esta importación
+  writeBatch,    // <- Añade esta importación
+  increment,     // <- Añade esta importación
+  Timestamp      // <- Añade esta importación
+} from "firebase/firestore";
+import { 
+  getAuth,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from "firebase/auth";
 
-// Configuración de Firebase desde variables de entorno
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -15,11 +31,28 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-// Inicialización de Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-const analytics = getAnalytics(app);
 
-// Exportación de servicios
-export { app, db, auth, analytics };
+export {
+  db,
+  auth,
+  // Firestore functions
+  collection,
+  getDocs,
+  addDoc,
+  doc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,    // Exporta orderBy
+  writeBatch, // Exporta writeBatch
+  increment,  // Exporta increment
+  Timestamp,  // Exporta Timestamp
+  // Auth functions
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+};
