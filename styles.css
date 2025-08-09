@@ -50,6 +50,39 @@ body {
     opacity: 0.8;
 }
 
+.logo-container {
+    display: flex;
+    align-items: center;
+    margin-right: 1rem;
+}
+
+.logo {
+    height: 50px; /* Ajusta según necesites */
+    width: auto;
+    margin-right: 15px;
+}
+
+.header-container {
+    display: flex;
+    align-items: center;
+}
+
+/* Ajusta el h1 para que quede alineado con el logo */
+.main-header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    line-height: 1.2;
+}
+
+@media (max-width: 768px) {
+    .logo {
+        height: 40px;
+    }
+    .main-header h1 {
+        font-size: 1.2rem;
+    }
+}
+
 /* Main Content */
 .main-content {
     width: 90%;
