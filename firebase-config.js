@@ -9,10 +9,10 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,       // <- Añade esta importación
-  writeBatch,    // <- Añade esta importación
-  increment,     // <- Añade esta importación
-  Timestamp      // <- Añade esta importación
+  orderBy,
+  writeBatch,
+  increment,
+  Timestamp
 } from "firebase/firestore";
 import { 
   getAuth,
@@ -21,6 +21,7 @@ import {
   onAuthStateChanged
 } from "firebase/auth";
 
+// Configuración de Firebase (usa variables de entorno Vite)
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -31,14 +32,28 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
+// Inicialización de Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+// Inicialización condicional de Analytics solo si está configurado
+let analytics;
+if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
+  import("firebase/analytics").then(({ getAnalytics }) => {
+    analytics = getAnalytics(app);
+  }).catch(error => {
+    console.warn("Firebase Analytics no pudo cargarse:", error);
+  });
+}
+
+// Exporta todas las funciones necesarias
 export {
+  app,
   db,
   auth,
-  // Firestore functions
+  analytics,
+  // Funciones de Firestore
   collection,
   getDocs,
   addDoc,
@@ -47,12 +62,20 @@ export {
   deleteDoc,
   query,
   where,
-  orderBy,    // Exporta orderBy
-  writeBatch, // Exporta writeBatch
-  increment,  // Exporta increment
-  Timestamp,  // Exporta Timestamp
-  // Auth functions
+  orderBy,
+  writeBatch,
+  increment,
+  Timestamp,
+  // Funciones de Auth
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged
 };
+
+// Para depuración en desarrollo
+if (import.meta.env.MODE === 'development') {
+  console.log('Firebase configurado correctamente');
+  console.log('App:', app);
+  console.log('Database:', db);
+  console.log('Auth:', auth);
+}
