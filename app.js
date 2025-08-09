@@ -5,7 +5,19 @@ import loadFirebase from './firebase-config.js';
 let firebase;
 
 async function init() {
-  firebase = await loadFirebase();
+  try {
+    firebase = await initializeFirebase();
+    // Ahora usa firebase.db, firebase.auth, etc.
+    console.log("Firebase initialized successfully");
+    
+    // Ejemplo de uso:
+    const products = await firebase.getDocs(firebase.collection(firebase.db, "productos"));
+    // Resto de tu lógica...
+    
+  } catch (error) {
+    console.error("Failed to initialize Firebase:", error);
+    alert("Error al inicializar la aplicación. Por favor recarga la página.");
+  }
   // Ahora usa firebase.db, firebase.auth, etc.
   setupEventListeners();
   setupAuth();

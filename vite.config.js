@@ -5,29 +5,22 @@ export default defineConfig({
     target: 'esnext',
     rollupOptions: {
       external: [
-        'firebase',
-        'firebase/app',
-        'firebase/firestore',
-        'firebase/auth'
+        // Elimina todas las referencias a firebase aquí
+        // Solo mantén otras dependencias externas si son necesarias
       ],
       output: {
-        manualChunks: {
-          firebase: ['firebase']
+        manualChunks: (id) => {
+          // Elimina cualquier referencia a firebase en manualChunks
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
         }
       }
     }
   },
   optimizeDeps: {
     exclude: [
-      'firebase',
-      'firebase/app',
-      'firebase/firestore',
-      'firebase/auth'
-    ],
-    include: [
-      'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js',
-      'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js',
-      'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js'
+      // Elimina las exclusiones de firebase
     ]
   }
 });
