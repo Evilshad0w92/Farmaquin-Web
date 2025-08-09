@@ -1,19 +1,67 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Punto de Venta - Farmaquin</title>
-  <link rel="stylesheet" href="styles.css">
-  <!-- Precarga Firebase para mejor rendimiento -->
-  <link rel="preconnect" href="https://www.gstatic.com">
-  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js" as="script">
-  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js" as="script">
-  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js" as="script">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Punto de Venta - Farmaquin</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
 </head>
 <body>
-  <!-- Tu contenido existente -->
-  
-  <script type="module" src="app.js"></script>
+    <header class="main-header">
+        <div class="header-container">
+            <h1>Farmaquin - Punto de Venta</h1>
+            <nav>
+                <ul class="nav-list">
+                    <li><a href="#" id="nav-inventario">Inventario</a></li>
+                    <li><a href="#" id="nav-ventas">Punto de Venta</a></li>
+                    <li><a href="#" id="nav-registros">Registros</a></li>
+                    <li id="auth-link" class="hidden">
+                        <a href="#" id="logout-btn">Cerrar sesión</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <!-- Sección de Login -->
+        <section id="login-section" class="auth-section">
+            <div class="auth-form">
+                <h2>Iniciar Sesión</h2>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-email">Correo electrónico</label>
+                        <input type="email" id="login-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Contraseña</label>
+                        <input type="password" id="login-password" required>
+                    </div>
+                    <button type="submit" class="btn-primary">Ingresar</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Sección de Inventario (oculta inicialmente) -->
+        <section id="inventario" class="hidden">
+            <h2>Inventario de Productos</h2>
+            <div id="lista-productos" class="product-grid"></div>
+        </section>
+
+        <!-- Sección de Punto de Venta (oculta inicialmente) -->
+        <section id="punto-venta" class="hidden">
+            <h2>Punto de Venta</h2>
+            <div id="sale-product-list"></div>
+        </section>
+
+        <!-- Sección de Registros (oculta inicialmente) -->
+        <section id="registros-ventas" class="hidden">
+            <h2>Registro de Ventas</h2>
+            <div id="sales-list"></div>
+        </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
 </body>
 </html>

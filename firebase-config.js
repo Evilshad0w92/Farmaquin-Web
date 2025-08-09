@@ -1,4 +1,3 @@
-// Importaciones estándar de Firebase v9 (modular)
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore,
@@ -22,7 +21,7 @@ import {
   onAuthStateChanged
 } from 'firebase/auth';
 
-// Configuración directa (reemplaza con tus valores si son diferentes)
+// Configuración de Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyBAiT8MT5P0olLzNKVwQO31Vvo1wppwEFI",
   authDomain: "farmaquin-web.firebaseapp.com",
@@ -33,19 +32,16 @@ const firebaseConfig = {
   measurementId: "G-189PH4GZQ1"
 };
 
-// Inicialización de servicios Firebase
+// Inicialización de Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Exportación de todos los servicios y funciones necesarias
-export {
-  // Instancias principales
-  app,
+// Exportación explícita de todos los módulos necesarios
+export { 
   db,
   auth,
-  
-  // Funciones de Firestore
+  // Firestore functions
   collection,
   getDocs,
   addDoc,
@@ -58,27 +54,14 @@ export {
   writeBatch,
   increment,
   Timestamp,
-  
-  // Funciones de Autenticación
+  // Auth functions
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged
 };
 
-// Opcional: Inicialización condicional de Analytics
-if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
-  import('firebase/analytics')
-    .then(({ getAnalytics }) => {
-      const analytics = getAnalytics(app);
-      console.log('Firebase Analytics inicializado');
-    })
-    .catch((error) => {
-      console.warn('Error al cargar Firebase Analytics:', error);
-    });
-}
-
-// Para debug en desarrollo
-if (process.env.NODE_ENV === 'development') {
-  console.log('Firebase configurado correctamente');
-  window.firebase = { app, db, auth };
+// Para debug
+console.log('Firebase configurado correctamente');
+if (import.meta.env.MODE === 'development') {
+  window.firebase = { db, auth };
 }
