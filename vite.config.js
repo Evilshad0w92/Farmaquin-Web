@@ -1,7 +1,14 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vite';
 
 export default defineConfig({
-  optimizeDeps: {
-    include: ['firebase/app', 'firebase/firestore', 'firebase/auth']
+  build: {
+    rollupOptions: {
+      external: [
+        'firebase',
+        'firebase/app',
+        'firebase/firestore',
+        'firebase/auth'
+      ]
+    }
   }
-})
+});
