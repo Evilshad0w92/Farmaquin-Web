@@ -1,9 +1,12 @@
 
-//gets access token and user from data and storage it on localStorage 
-// to be able to use them on multiple windows
-export function saveSession(data){
+//gets access token from data and storage it on localStorage to be able to use them on multiple windows
+export function saveToken(data){
     localStorage.setItem("token", data.access_token);
-    localStorage.setItem("user", JSON.stringify(data.user));
+}
+
+//gets the user and storage it on localStorage
+export function saveUser(user){
+    localStorage.setItem("user", JSON.stringify(user));
 }
 
 //when called, returns the value of the item "token" from localStorage

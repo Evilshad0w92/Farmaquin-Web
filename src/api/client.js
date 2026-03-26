@@ -19,6 +19,8 @@ export async function apiFetch(endpoint, options = {}) {
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {...options, headers});
     const contentType = response.headers.get("content-type") || "";
+    const data = contentType.includes("application/json") ? await response.json() : await response.text();
+    
     if(!response.ok){
         throw new Error(data.detail || data.error || "Error en la peticion");
     }

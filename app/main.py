@@ -1,9 +1,21 @@
 from fastapi import FastAPI
 from app.db.connection import get_conn
+from fastapi.middleware.cors import CORSMiddleware
 from app.routes import auth, pos, returns, users, sales, cashcut, expenses
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title = 'Farmaquin ERP')
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.mount("/static",StaticFiles(directory = "app/static"), name = "static")
 
 app.include_router(users.router, prefix="/users", tags=["users"])

@@ -1,5 +1,5 @@
-import { loginRequest } from "../api/auth";
-import { saveSession } from "../utils/storage";
+import { getMe, loginRequest } from "../api/auth";
+import { saveSession, saveToken, saveUser } from "../utils/storage";
 
 export function renderLogin(container, onLogingSuccess){
     //Places all the elements on the form
@@ -15,6 +15,9 @@ export function renderLogin(container, onLogingSuccess){
                 
                 <label>Contraseña</label>
                 <input type = "password" id = "password" required />
+
+                <label>Caja</label>
+                <input type = "number" id = "box_id" required min = "1" />
 
                 <button type = "submit">Acceder</button>
                 <p id = "login-error" class = "login error"></p>
@@ -33,15 +36,18 @@ export function renderLogin(container, onLogingSuccess){
 
         const username = document.getElementById("username").value.trim().toUpperCase();
         const password = document.getElementById("password").value.trim();
+        const boxId = document.getElementById("box_id").value.trim();
 
         try{
-            const data = await loginRequest(username, password);
-            saveSession(data);
+            const data = await loginRequest(username, password, boxId);
+            saveToken(loginData.access_token);
+            const meData = await getMe();
+            saveUser(meData.user);
+
             onLogingSuccess();
         } catch (error) {
             errorE1.textContent = error.message || "No se pudo iniciar sesión";
         }
-    }
-    )
+    });
 
 }
