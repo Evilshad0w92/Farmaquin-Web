@@ -6,7 +6,7 @@ python-multipart
 pydantic
 PyJWT
 passlib[bcrypt]
-bcrypt
+bcrypt==4.0.1
 requests
 Pillow
 python-jose[cryptography]
