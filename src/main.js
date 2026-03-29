@@ -1,9 +1,12 @@
 import "./styles/main.css";
 import "./styles/login.css";
 import "./styles/layout.css";
+import "./styles/pos.css";
+
 
 import { renderLogin } from "./pages/login";
 import { renderDashboard } from "./pages/dashboard";
+import { renderPOS } from "./pages/pos";
 import { renderSidebar } from "./components/sidebar";
 import { renderHeader } from "./components/header";
 import { getToken, clearSession } from "./utils/storage";
@@ -28,6 +31,10 @@ function renderLayout(page = "dashboard"){
         renderDashboard(content);
     }
 
+    if(page === "pos"){
+        renderPOS(content);
+    }
+
     //Reads the button clicked with atribute data-page and calls renderLayout to refresh to the corresponding layout
     document.querySelectorAll("[data-page]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -49,6 +56,8 @@ function initApp(){
         renderLogin(app, () => renderLayout("dashboard"));
         return;
     }
+
+    renderLayout("dashboard")
 }
 
 initApp();

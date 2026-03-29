@@ -1,19 +1,32 @@
 import { apiFetch } from "./client";
 
-//When called with username, password and boxId parameters calls the apiFecth funtion from app/src/api/client.js
-// and return its reponse
+//When called returns the list of active boxes
+export async function getBoxes() {
+    return await apiFetch("/auth/boxes",{ method: "GET"});    
+}
+
+//When called with username, password and boxId parameters calls the apiFecth funtion from app/src/api/client.js and return its reponse
 export async function loginRequest(username, password, boxId) {
-    return await apiFetch("/auth/login",{
+    const payload = {
+        username,
+        password,
+        box_id: Number(boxId)
+    };
+
+    return await apiFetch("/auth/login", {
         method: "POST",
-        body: JSON.stringify({username, 
-                              password, 
-                              boxId: Number(boxId)}),
-        headers: {"Content-Type": "application/json"},
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload),
     });    
 }
 
-export async function getMe() {
-    return await apiFetch("/user/me", {
+export async function getMe(token) {
+    return await apiFetch("/users/me", {
         method: "GET",
-    })
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    });
 }

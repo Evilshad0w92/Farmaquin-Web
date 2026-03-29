@@ -9,7 +9,10 @@ def _row_to_product(row):
             "price_sell": row[5],
             "active": row[6],
             "discount_type": row[7], 
-            "discount_value": row[8]}
+            "discount_value": row[8],
+            "lab_name": row[9],
+            "section_name": row[10]
+            }
 
 def get_product_by_id(product_id: int, current_qty: int, cursor, box_id: int):
     try:
@@ -37,10 +40,11 @@ def get_product_by_id(product_id: int, current_qty: int, cursor, box_id: int):
 
 def get_product_by_barcode(barcode: str, current_qty: int, cursor, box_id: int):
     try:
-        cursor.execute("""SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active, d.type, COALESCE(d.value, 0) discount 
+        cursor.execute("""SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active, d.type, COALESCE(d.value, 0) discount, p.lab_name, s.name
                           FROM products p LEFT JOIN discounts d ON p.id = d.product_id AND d.active = true AND CURRENT_DATE BETWEEN d.start_date AND d.end_date 
                                           LEFT JOIN boxes b ON p.location_id = b.location_id 
-                          WHERE p.barcode =%s AND b.id = %s""", (barcode, box_id))
+                                          LEFT JOIN sections s ON p.section_id = s.id 
+                          WHERE p.barcode =%s AND b.id = %s AND p.active = true """, (barcode, box_id))
         row = cursor.fetchone()
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Producto no encontrado")
@@ -62,9 +66,10 @@ def get_product_by_barcode(barcode: str, current_qty: int, cursor, box_id: int):
 
 def search_product(query: str, cursor, box_id: int , limit: int = 10):
     try:
-        cursor.execute("""SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active, d.type, COALESCE(d.value, 0) discount  
-                          FROM products p LEFT JOIN discounts d ON p.id = d.product_id AND d.active = true AND CURRENT_DATE BETWEEN d.start_date AND d.end_date
-                                          LEFT JOIN boxes b ON p.location_id = b.location_id
+        cursor.execute("""SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active, d.type, COALESCE(d.value, 0) discount, p.lab_name, s.name
+                          FROM products p LEFT JOIN discounts d ON p.id = d.product_id AND d.active = true AND CURRENT_DATE BETWEEN d.start_date AND d.end_date 
+                                          LEFT JOIN boxes b ON p.location_id = b.location_id 
+                                          LEFT JOIN sections s ON p.section_id = s.id
                           WHERE p.name ILIKE %s AND b.id = %s AND p.active = true LIMIT %s""", (f"%{query}%", box_id, limit))
         rows = cursor.fetchall()
         if not rows:
@@ -76,7 +81,9 @@ def search_product(query: str, cursor, box_id: int , limit: int = 10):
                  "stock": row[4], 
                  "price_sell": row[5], 
                  "discount_type": row[7], 
-                 "discount_value": row[8]} 
+                 "discount_value": row[8],
+                 "lab_name": row[9],
+                 "section_name": row[10]} 
                  for row in rows]
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al obtener el producto")

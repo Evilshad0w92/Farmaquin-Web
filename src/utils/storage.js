@@ -1,7 +1,7 @@
 
 //gets access token from data and storage it on localStorage to be able to use them on multiple windows
-export function saveToken(data){
-    localStorage.setItem("token", data.access_token);
+export function saveToken(token){
+    localStorage.setItem("token", token);
 }
 
 //gets the user and storage it on localStorage

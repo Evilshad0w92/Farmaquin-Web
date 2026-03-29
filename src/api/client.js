@@ -8,21 +8,42 @@ const API_BASE_URL = "https://farmaquin-backend.onrender.com";
 export async function apiFetch(endpoint, options = {}) {
     
     const token = localStorage.getItem("token");
-    const headers = {
-        "Content-Type": "applications/json",
-        ...(options.headers || {})
+    const headers = {...(options.headers || {})
     };
     
-    if(token){
+    if (!headers.Authorization && token) {
         headers.Authorization = `Bearer ${token}`;
     }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {...options, headers});
     const contentType = response.headers.get("content-type") || "";
-    const data = contentType.includes("application/json") ? await response.json() : await response.text();
+    let data;
     
-    if(!response.ok){
-        throw new Error(data.detail || data.error || "Error en la peticion");
+    if(contentType.includes("application/json")){ 
+        data = await response.json()
+    } else {
+        await response.text();
     }
+
+    if (!response.ok) {
+        if (typeof data === "string") {
+            throw new Error(data);
+        }
+
+        if (data && typeof data.detail === "string") {
+            throw new Error(data.detail);
+        }
+
+        if (Array.isArray(data?.detail)) {
+            throw new Error(JSON.stringify(data.detail));
+        }
+
+        if (data && typeof data.error === "string") {
+            throw new Error(data.error);
+        }
+
+        throw new Error(JSON.stringify(data));
+    }
+
     return data;
 }
