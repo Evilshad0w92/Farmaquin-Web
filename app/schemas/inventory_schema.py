@@ -15,3 +15,21 @@ class InventoryAdjustmentResponse(BaseModel):
     reason: str
     new_stock: int
     created_at: str
+
+class InventoryRestockCreate(BaseModel):
+    product_id: int
+    quantity: int
+    unit_cost: float
+    sell_price: float
+    provider_id: int
+
+class InventoryRestockResponse(BaseModel):
+    id: int
+    product_id: int
+    quantity: int
+    unit_cost: str
+    sell_price: str
+    provider_id: int
+    provider_name: str
+    new_stock: int
+    created_at: str

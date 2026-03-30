@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.db.connection import get_conn
 from app.core.security.deps import get_current_user
-from app.schemas.inventory_schema import InventoryAdjustmentCreate, InventoryAdjustmentResponse
-from decimal import Decimal
+from app.schemas.inventory_schema import InventoryAdjustmentCreate, InventoryAdjustmentResponse, InventoryRestockCreate,InventoryRestockResponse
+from decimal import Decimal, ROUND_HALF_UP
 import psycopg2
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -113,3 +113,85 @@ def adjust_inventory(data: InventoryAdjustmentCreate, current_user: dict = Depen
     finally:
         cursor.close()
         conn.close()
+
+# This route is for restocking the inventory of a product, it allows increasing the stock of a product by a specified quantity, unit cost and provider. It also records the restock in the inventory_restocks table with the user and box information.
+@router.post("/restock", response_model=InventoryRestockResponse, status_code=status.HTTP_201_CREATED)
+def restock_inventory(data: InventoryRestockCreate, current_user: dict = Depends(get_current_user)):
+    conn = get_conn()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")   
+    cursor = conn.cursor()
+    q = Decimal("0.01")
+
+    try:
+        box_id = current_user["box_id"]
+        user_id = current_user["sub"]
+        if data.quantity <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La cantidad debe ser mayor a cero")
+        
+        unit_cost = Decimal(str(data.unit_cost)).quantize(q, rounding=ROUND_HALF_UP)
+
+        if unit_cost <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El costo  debe ser mayor a cero")  
+        
+        # Get provider information
+        cursor.execute("""SELECT id, name 
+                       FROM providers 
+                       WHERE id = %s""", (data.provider_id,))
+        
+        provider_row = cursor.fetchone()
+
+        if provider_row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proveedor no encontrado")
+
+        provider_id = provider_row[0]
+        provider_name = provider_row[1]
+
+        #Get current stock 
+        cursor.execute("""SELECT p.stock
+                          FROM products p JOIN boxes b ON p.location_id = b.location_id
+                          WHERE p.id = %s AND b.id = %s FOR UPDATE""", (data.product_id, box_id))
+        row = cursor.fetchone()
+        
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Producto no encontrado")
+        
+        current_stock = row[0]
+        new_stock = current_stock + data.quantity
+
+        # Update product stock and insert restock record in a transaction
+        cursor.execute("""UPDATE products SET stock = %s, cost = %s, price_sell = %s WHERE id = %s""", (new_stock, unit_cost, data.sell_price, data.product_id))
+
+        cursor.execute("""INSERT INTO inventory_restock (product_id, box_id, user_id, provider_id, unit_cost, price_sell, quantity) 
+                          VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, created_at""", (data.product_id, box_id, user_id, provider_id, unit_cost, data.sell_price, data.quantity))
+        
+        restock_row = cursor.fetchone()
+
+        if restock_row is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al registrar el reabastecimiento de inventario") 
+        conn.commit()
+
+        return InventoryRestockResponse(
+            id=restock_row[0],
+            product_id=data.product_id,
+            quantity=data.quantity,
+            unit_cost=str(unit_cost),
+            sell_price=str(data.sell_price),
+            provider_id=provider_id,
+            provider_name=provider_name,
+            new_stock=new_stock,
+            created_at=str(restock_row[1]),
+        )
+    except HTTPException:
+        conn.rollback()
+        raise
+    except psycopg2.Error as e:
+        conn.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail= f"Error de base de datos: {e}")
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al resurtir inventario: {e}")    
+    finally:
+        cursor.close()
+        conn.close()
+
