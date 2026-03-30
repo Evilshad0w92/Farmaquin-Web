@@ -12,9 +12,18 @@ def get_conn():
             dbname=os.getenv('DB_NAME'),
             user=os.getenv('DB_USER'),
             password=os.getenv('DB_PASS'),
-            sslmode="require",
-            options="-c timezone=America/Mexico_City"            
+            sslmode="require"        
         )
+
+        cursor = conn.cursor()
+        cursor.execute("SET TIME ZONE 'America/Mexico_City'")
+        cursor.close()
+
+        cursor = conn.cursor()
+        cursor.execute("SHOW TIME ZONE")
+        print("DB timezone:", cursor.fetchone())
+        cursor.close()
+
         return conn
     except Exception as e:
         print(f"Error connecting to the database: {e}")
