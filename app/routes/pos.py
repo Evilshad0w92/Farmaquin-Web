@@ -53,7 +53,8 @@ def scan(barcode: str, quantity: int = 1, current_user: dict = Depends(get_curre
             "price_after_discount": str(unit_price_final),
             "line_total": str(line_total),
             "lab_name": product["lab_name"],
-            "section_name": product["section_name"]}
+            "section_name": product["section_name"],
+            "method": product["method"],}
     except HTTPException as e:
         raise e
     except Exception as e:

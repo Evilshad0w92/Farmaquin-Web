@@ -11,12 +11,13 @@ def _row_to_product(row):
             "discount_type": row[7], 
             "discount_value": row[8],
             "lab_name": row[9],
-            "section_name": row[10]
+            "section_name": row[10],
+            "method": row[11]   
             }
 
 def get_product_by_id(product_id: int, current_qty: int, cursor, box_id: int):
     try:
-        cursor.execute("""SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active , d.type, COALESCE(d.value, 0) discount 
+        cursor.execute("""SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active , d.type, COALESCE(d.value, 0) discount, p.lab_name, s.name, p.method 
                           FROM products p LEFT JOIN discounts d ON p.id = d.product_id AND d.active = true AND CURRENT_DATE BETWEEN d.start_date AND d.end_date
                                           LEFT JOIN boxes b ON p.location_id = b.location_id 
                           WHERE-- p.id =%s AND b.id = %s""", (product_id, box_id))
@@ -40,7 +41,7 @@ def get_product_by_id(product_id: int, current_qty: int, cursor, box_id: int):
 
 def get_product_by_barcode(barcode: str, current_qty: int, cursor, box_id: int):
     try:
-        cursor.execute("""SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active, d.type, COALESCE(d.value, 0) discount, p.lab_name, s.name
+        cursor.execute("""SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active, d.type, COALESCE(d.value, 0) discount, p.lab_name, s.name, p.method
                           FROM products p LEFT JOIN discounts d ON p.id = d.product_id AND d.active = true AND CURRENT_DATE BETWEEN d.start_date AND d.end_date 
                                           LEFT JOIN boxes b ON p.location_id = b.location_id 
                                           LEFT JOIN sections s ON p.section_id = s.id 
@@ -66,11 +67,11 @@ def get_product_by_barcode(barcode: str, current_qty: int, cursor, box_id: int):
 
 def search_product(query: str, cursor, box_id: int , limit: int = 10):
     try:
-        cursor.execute("""SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active, d.type, COALESCE(d.value, 0) discount, p.lab_name, s.name
+        cursor.execute("""SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active, d.type, COALESCE(d.value, 0) discount, p.lab_name, s.name, p.method
                           FROM products p LEFT JOIN discounts d ON p.id = d.product_id AND d.active = true AND CURRENT_DATE BETWEEN d.start_date AND d.end_date 
                                           LEFT JOIN boxes b ON p.location_id = b.location_id 
                                           LEFT JOIN sections s ON p.section_id = s.id
-                          WHERE p.name ILIKE %s AND b.id = %s AND p.active = true LIMIT %s""", (f"%{query}%", box_id, limit))
+                          WHERE (p.name ILIKE %s OR p.formula ILIKE %s)AND b.id = %s AND p.active = true LIMIT %s""", (f"%{query}%", f"%{query}%", box_id, limit))
         rows = cursor.fetchall()
         if not rows:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Producto no encontrado o inactivo")
