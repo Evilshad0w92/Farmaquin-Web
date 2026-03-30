@@ -19,11 +19,6 @@ def get_conn():
         cursor.execute("SET TIME ZONE 'America/Mexico_City'")
         cursor.close()
 
-        cursor = conn.cursor()
-        cursor.execute("SHOW TIME ZONE")
-        print("DB timezone:", cursor.fetchone())
-        cursor.close()
-
         return conn
     except Exception as e:
         print(f"Error connecting to the database: {e}")
