@@ -12,7 +12,7 @@ def get_conn():
             dbname=os.getenv('DB_NAME'),
             user=os.getenv('DB_USER'),
             password=os.getenv('DB_PASS'),
-            sslmode="require"
+            sslmode="require",
             options="-c timezone=America/Mexico_City"            
         )
         return conn
