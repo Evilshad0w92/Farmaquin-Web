@@ -84,7 +84,8 @@ def search_product(query: str, cursor, box_id: int , limit: int = 10):
                  "discount_type": row[7], 
                  "discount_value": row[8],
                  "lab_name": row[9],
-                 "section_name": row[10]} 
+                 "section_name": row[10],
+                 "method": row[11]} 
                  for row in rows]
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al obtener el producto")
