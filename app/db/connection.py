@@ -13,6 +13,7 @@ def get_conn():
             user=os.getenv('DB_USER'),
             password=os.getenv('DB_PASS'),
             sslmode="require"
+            options="-c timezone=America/Mexico_City"            
         )
         return conn
     except Exception as e:
