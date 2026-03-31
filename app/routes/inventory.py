@@ -17,7 +17,7 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
 
     try:
         box_id = current_user["box_id"]
-        sql = """SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.lab_name, s.name, p.method, p.active, p.cost, pr.name
+        sql = """SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.lab_name, s.name, p.method, p.active, p.cost, pr.name, pr.id
                  FROM products p JOIN boxes b ON p.location_id = b.location_id 
                                  LEFT JOIN sections s ON p.section_id = s.id
                                  LEFT JOIN providers pr ON p.provider_id = pr.id
@@ -43,6 +43,7 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
                 "active": row[9],
                 "cost": str(row[10]),
                 "provider_name": row[11],
+                "provider_id": row[12],
             }
             for row in rows
         ]
