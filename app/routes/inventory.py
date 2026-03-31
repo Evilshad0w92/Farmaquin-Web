@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.db.connection import get_conn
 from app.core.security.deps import get_current_user
-from app.schemas.inventory_schema import InventoryAdjustmentCreate, InventoryAdjustmentResponse, InventoryRestockCreate,InventoryRestockResponse
+from app.schemas.inventory_schema import InventoryAdjustmentCreate, InventoryAdjustmentResponse, InventoryNewItemCreate, InventoryNewItemResponse, InventoryRestockCreate,InventoryRestockResponse
 from decimal import Decimal, ROUND_HALF_UP
 import psycopg2
 
@@ -56,7 +56,6 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
     finally:
         cursor.close()
         conn.close()
-
 
 # This route is for adjusting the inventory of a product, it allows increasing or decreasing the stock of a product by a specified quantity and reason. It also records the adjustment in the inventory_adjustments table with the user and box information.
 @router.post("/adjustment", response_model=InventoryAdjustmentResponse, status_code=status.HTTP_201_CREATED)
@@ -199,3 +198,114 @@ def restock_inventory(data: InventoryRestockCreate, current_user: dict = Depends
         cursor.close()
         conn.close()
 
+# This route creates a new product in the inventory and record as restock
+@router.post("/create")
+def create_inventory(data: InventoryNewItemCreate, current_user: dict = Depends(get_current_user)):
+    conn = get_conn()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")   
+    cursor = conn.cursor()
+
+    q = Decimal("0.01")
+    
+    try:
+        box_id = current_user["box_id"]
+        user_id = current_user["sub"]
+        if data.stock <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La cantidad debe ser mayor a cero")
+        elif data.unit_cost <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El costo  debe ser mayor a cero")
+        elif data.sell_price <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El precio de venta debe ser mayor a cero")
+        elif data.sell_price < data.unit_cost:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El precio de venta no puede ser menor al costo")
+        elif data.min_stock < 1:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El stock mínimo no puede ser menor a 1")
+    
+        unit_cost = Decimal(str(data.unit_cost)).quantize(q, rounding=ROUND_HALF_UP)
+        sell_price = Decimal(str(data.sell_price)).quantize(q, rounding=ROUND_HALF_UP)
+
+        # Get provider information
+        cursor.execute("""
+                       SELECT id, name 
+                       FROM providers 
+                       WHERE id = %s""", (data.provider_id,))
+        provider_row = cursor.fetchone()
+        if not provider_row:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Proveedor no encontrado")
+        provider_id = provider_row[0]
+        provider_name = provider_row[1]
+
+        # Get section information
+        cursor.execute("""
+                       SELECT id, name 
+                       FROM sections 
+                       WHERE id = %s""", (data.section_id,))
+        section_row = cursor.fetchone()
+        if not section_row:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sección no encontrada")
+        section_id = section_row[0]
+        section_name = section_row[1]
+
+        # Get location information
+        cursor.execute("""
+                       SELECT p.id, p.name 
+                       FROM locations p JOIN boxes b ON p.id = b.location_id
+                       WHERE b.id = %s""", (box_id,))
+        location_row = cursor.fetchone()
+        if not location_row:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ubicación no encontrada")
+        location_id = location_row[0]
+        location_name = location_row[1]
+
+        # Get lab names previously recored in products
+        cursor.execute("""
+                        SELECT DISTINCT lab_name
+                        FROM products
+                        ORDER BY lab_name""")
+        lab_rows = cursor.fetchall()
+        lab_names = [row[0] for row in lab_rows]
+
+        # Insert a new product
+        cursor.execute("""INSERT INTO products (barcode, name, formula, lab_name, method, cost, price_sell, stock, min_stock, section_id, provider_id, location_id) 
+                          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning id, created_at""", (data.barcode, data.name, data.formula, data.lab_name, data.method, unit_cost, sell_price, data.stock, data.min_stock, data.section_id, provider_id, location_id,))
+        product_row = cursor.fetchone()
+        if product_row is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al crear el producto")
+        
+        #insert restock record in a transaction
+        cursor.execute("""INSERT INTO inventory_restock (product_id, box_id, user_id, provider_id, unit_cost, quantity, price_sell) 
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)""", (product_row[0], box_id, user_id, provider_id, unit_cost, data.stock, sell_price,))
+
+        conn.commit()
+        return InventoryNewItemResponse(
+            id=product_row[0], 
+            barcode=data.barcode,
+            name=data.name,
+            formula=data.formula,
+            lab_name=data.lab_name,
+            method=data.method,
+            unit_cost=str(unit_cost),
+            sell_price=str(sell_price),
+            stock=data.stock,
+            min_stock=data.min_stock,
+            section_id=section_id,
+            section_name=section_name,
+            provider_id=provider_id,
+            provider_name=provider_name,
+            location_id=location_id,
+            location_name=location_name,
+            created_at=str(product_row[1]),
+        )
+    except HTTPException:
+        conn.rollback()
+        raise
+    except psycopg2.Error as e:
+        conn.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail= f"Error de base de datos: {e}")
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al crear producto: {e}") 
+    finally:
+        cursor.close()
+        conn.close()

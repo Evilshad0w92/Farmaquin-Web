@@ -33,3 +33,35 @@ class InventoryRestockResponse(BaseModel):
     provider_name: str
     new_stock: int
     created_at: str
+
+class InventoryNewItemCreate(BaseModel):
+    barcode: str
+    name: str
+    formula: str
+    lab_name: str
+    method: str
+    unit_cost: float
+    sell_price: float
+    stock: int
+    min_stock: int
+    section_id: int
+    provider_id: int
+
+class InventoryNewItemResponse(BaseModel):
+    id: int
+    barcode: str
+    name: str
+    formula: str
+    lab_name: str
+    method: str
+    unit_cost: str
+    sell_price: str
+    stock: int
+    min_stock: int
+    section_id: int
+    section_name: str
+    provider_id: int
+    provider_name: str
+    location_id: int
+    location_name: str
+    created_at: str
