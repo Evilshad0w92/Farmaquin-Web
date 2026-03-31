@@ -17,9 +17,10 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
 
     try:
         box_id = current_user["box_id"]
-        sql = """SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.lab_name, s.name, p.method, p.active
+        sql = """SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.lab_name, s.name, p.method, p.active, p.cost, pr.name
                  FROM products p JOIN boxes b ON p.location_id = b.location_id 
                                  LEFT JOIN sections s ON p.section_id = s.id
+                                 LEFT JOIN providers pr ON p.provider_id = pr.id
                  WHERE b.id = %s AND (p.name ILIKE %s OR p.formula ILIKE %s OR p.barcode ILIKE %s)"""
         params = [box_id, f"%{query}%", f"%{query}%", f"%{query}%"]
         if low_stock:
@@ -40,6 +41,8 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
                 "section_name": row[7],
                 "method": row[8],
                 "active": row[9],
+                "cost": str(row[10]),
+                "provider_name": row[11],
             }
             for row in rows
         ]
