@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.db.connection import get_conn
 from app.core.security.deps import get_current_user
-from app.schemas.inventory_schema import InventoryAdjustmentCreate, InventoryAdjustmentResponse, InventoryNewItemCreate, InventoryNewItemResponse, InventoryRestockCreate,InventoryRestockResponse
+from app.schemas.inventory_schema import InventoryAdjustmentCreate, InventoryAdjustmentResponse, InventoryNewItemCreate, InventoryNewItemResponse, InventoryRestockCreate,InventoryRestockResponse, labListResponse
 from decimal import Decimal, ROUND_HALF_UP
 import psycopg2
 
@@ -306,6 +306,26 @@ def create_inventory(data: InventoryNewItemCreate, current_user: dict = Depends(
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al crear producto: {e}") 
+    finally:
+        cursor.close()
+        conn.close()
+
+@router.get("/", response_model=list[labListResponse])
+def get_labNames(current_user: dict = Depends(get_current_user)):
+    conn = get_conn()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""SELECT DISTINCT lab_name 
+                          FROM products
+                          ORDER BY lab_name ASC""",)
+        rows = cursor.fetchall()
+
+        return [labListResponse(lab_name=row[0]) for row in rows]
+    except psycopg2.Error as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error de base de datos: {e}")
     finally:
         cursor.close()
         conn.close()

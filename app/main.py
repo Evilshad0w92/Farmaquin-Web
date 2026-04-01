@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from app.db.connection import get_conn
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import auth, pos, returns, users, sales, cashcut, expenses, inventory, provider
+from app.routes import auth, pos, returns, users, sales, cashcut, expenses, inventory, provider, section
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title = 'Farmaquin ERP')
@@ -27,6 +27,7 @@ app.include_router(returns.router)
 app.include_router(expenses.router)
 app.include_router(inventory.router)
 app.include_router(provider.router)
+app.include_router(section.router)
 
 @app.get("/")
 def inicio():

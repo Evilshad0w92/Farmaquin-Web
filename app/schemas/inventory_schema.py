@@ -65,3 +65,6 @@ class InventoryNewItemResponse(BaseModel):
     location_id: int
     location_name: str
     created_at: str
+
+class labListResponse(BaseModel):
+    lab_name: str
