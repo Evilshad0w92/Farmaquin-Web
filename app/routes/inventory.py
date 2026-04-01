@@ -21,7 +21,7 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
                  FROM products p JOIN boxes b ON p.location_id = b.location_id 
                                  LEFT JOIN sections s ON p.section_id = s.id
                                  LEFT JOIN providers pr ON p.provider_id = pr.id
-                 WHERE b.id = %s AND (p.name ILIKE %s OR p.formula ILIKE %s OR p.barcode ILIKE %s)"""
+                 WHERE b.id = %s AND (p.name ILIKE %s OR p.formula ILIKE %s OR p.barcode ILIKE %s AND p.ACTIVE = true)"""
         params = [box_id, f"%{query}%", f"%{query}%", f"%{query}%"]
         if low_stock:
             sql += " AND p.stock < 5"
