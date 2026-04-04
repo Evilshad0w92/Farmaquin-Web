@@ -65,6 +65,32 @@ class InventoryNewItemResponse(BaseModel):
     location_id: int
     location_name: str
     created_at: str
+    
+class InventoryEditCreate(BaseModel):
+    product_id: int
+    name: str
+    formula: str
+    lab_name: str
+    method: str
+    unit_cost: float
+    sell_price: float
+    min_stock: int
+    section_id: int
+    provider_id: int
+
+class InventoryEditResponse(BaseModel):
+    id: int
+    product_id: int
+    name: str
+    formula: str
+    lab_name: str
+    method: str
+    unit_cost: float
+    sell_price: float
+    min_stock: int
+    section_id: int
+    provider_id: int
+    created_at: str
 
 class labListResponse(BaseModel):
     lab_name: str
