@@ -489,3 +489,34 @@ def edit_inventory(data: InventoryEditCreate, current_user: dict = Depends(get_c
     finally:
         cursor.close()
         conn.close()
+
+@router.get("/labs", response_model=list[labListResponse])
+def get_lab_names(current_user: dict = Depends(get_current_user)):
+    conn = get_conn()
+    if conn is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al conectar a la base de datos"
+        )
+
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT DISTINCT lab_name
+            FROM products
+            WHERE lab_name IS NOT NULL
+              AND TRIM(lab_name) <> ''
+            ORDER BY lab_name
+        """)
+        rows = cursor.fetchall()
+
+        return [{"lab_name": row[0]} for row in rows]
+
+    except psycopg2.Error as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error de base de datos: {e}"
+        )
+    finally:
+        cursor.close()
+        conn.close()
