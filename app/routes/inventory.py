@@ -12,23 +12,56 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 def search(query: str = "", low_stock: bool = False, current_user: dict = Depends(get_current_user)):
     conn = get_conn()
     if conn is None:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")       
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al conectar a la base de datos"
+        )
+
     cursor = conn.cursor()
 
     try:
         box_id = current_user["box_id"]
-        sql = """SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.lab_name, s.name, p.method, p.active, p.cost, pr.name, pr.id
-                 FROM products p JOIN boxes b ON p.location_id = b.location_id, p.section_id, p.min_stock 
-                                 LEFT JOIN sections s ON p.section_id = s.id
-                                 LEFT JOIN providers pr ON p.provider_id = pr.id
-                 WHERE b.id = %s AND (p.name ILIKE %s OR p.formula ILIKE %s OR p.barcode ILIKE %s AND p.ACTIVE = true)"""
+
+        sql = """
+            SELECT 
+                p.id,
+                p.barcode,
+                p.name,
+                p.formula,
+                p.stock,
+                p.price_sell,
+                p.lab_name,
+                s.name,
+                p.method,
+                p.active,
+                p.cost,
+                pr.name,
+                pr.id,
+                p.section_id,
+                p.min_stock
+            FROM products p
+            JOIN boxes b ON p.location_id = b.location_id
+            LEFT JOIN sections s ON p.section_id = s.id
+            LEFT JOIN providers pr ON p.provider_id = pr.id
+            WHERE b.id = %s
+              AND p.active = true
+              AND (
+                    p.name ILIKE %s
+                    OR p.formula ILIKE %s
+                    OR p.barcode ILIKE %s
+              )
+        """
+
         params = [box_id, f"%{query}%", f"%{query}%", f"%{query}%"]
+
         if low_stock:
             sql += " AND p.stock < 5"
+
         sql += " ORDER BY p.name LIMIT 20"
-        
+
         cursor.execute(sql, params)
         rows = cursor.fetchall()
+
         return [
             {
                 "id": row[0],
@@ -49,12 +82,19 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
             }
             for row in rows
         ]
+
     except psycopg2.Error as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail= f"Error de base de datos: {e}")  
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error de base de datos: {e}"
+        )
     except HTTPException as e:
         raise e
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al buscar productos")
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al buscar productos"
+        )
     finally:
         cursor.close()
         conn.close()
