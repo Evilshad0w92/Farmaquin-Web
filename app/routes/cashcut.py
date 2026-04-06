@@ -260,6 +260,28 @@ def close_cashcut(data: CashcutClose, current_user: dict = Depends(get_current_u
         difference =  cash_counted - cash_expected
         net_total = total_sales - total_returns
 
+        #Get sales done since the last boxcut
+        cursor.execute("""
+            SELECT id, total, payment_method, created_at
+            FROM sales
+            WHERE box_id = %s
+              AND created_at > %s
+              AND created_at <= %s
+            ORDER BY created_at ASC
+        """, (current_user["box_id"], from_ts, to_ts))
+
+        sales_detail_rows = cursor.fetchall()
+
+        sales_detail = [
+            {
+                "sale_id": row[0],
+                "total": str(row[1] or Decimal("0.00")),
+                "payment_method": row[2],
+                "created_at": str(row[3]),
+            }
+            for row in sales_detail_rows
+        ]
+
         # Insert new cash cut record
         cursor.execute("""INSERT INTO cash_cuts(from_ts, to_ts,
                                                 total, total_cash, total_card, total_transfer,
@@ -296,7 +318,10 @@ def close_cashcut(data: CashcutClose, current_user: dict = Depends(get_current_u
             "cash_expeted": str(cash_expected),
             "cash_counted": str(cash_counted),
             "difference": str(difference),
-            "comment": data.comment
+            "comment": data.comment,
+
+            "ticket_type": "cashcut",
+            "sales_detail": sales_detail
         }
     
     except Exception as e:
