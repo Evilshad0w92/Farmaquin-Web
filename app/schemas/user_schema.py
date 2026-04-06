@@ -12,3 +12,7 @@ class UserCreate(BaseModel):
         if len(v) < 8:
             raise ValueError('La contraseña debe tener al menos 8 caracteres')
         return v
+    
+class UserChangePassword(BaseModel):
+    current_password: str
+    new_password: str

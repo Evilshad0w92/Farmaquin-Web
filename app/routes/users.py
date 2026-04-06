@@ -4,8 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 from fastapi import Depends
 from app.db.connection import get_conn
-from app.schemas.user_schema import UserCreate
-from app.core.security.hashing import hash_password
+from app.schemas.user_schema import UserCreate, UserChangePassword
+from app.core.security.hashing import hash_password, verify_password
 from app.core.security.deps import get_current_user, requires_role
 
 
@@ -51,7 +51,85 @@ async def create_user(user: UserCreate, current_user: dict = Depends(requires_ro
 async def get_me(current_user: dict = Depends(get_current_user)):
     return {"message": "Usuario autenticado", "user": current_user}  
 
+@router.put("/me/password")
+async def change_my_password(data: UserChangePassword, current_user: dict = Depends(get_current_user)):
+    conn = get_conn()
+    cursor = None
 
+    if conn is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No se pudo conectar a la base de datos"
+        )
+
+    try:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT password_hash
+            FROM users
+            WHERE id = %s
+        """, (current_user["sub"],))
+
+        row = cursor.fetchone()
+
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuario no encontrado"
+            )
+
+        stored_hash = row[0]
+
+        if not verify_password(data.current_password, stored_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="La contraseña actual es incorrecta"
+            )
+
+        if not data.new_password or data.new_password.strip() == "":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La nueva contraseña no puede estar vacía"
+            )
+
+        if data.current_password == data.new_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La nueva contraseña no puede ser igual a la actual"
+            )
+
+        new_hash = hash_password(data.new_password)
+
+        cursor.execute("""
+            UPDATE users
+            SET password_hash = %s
+            WHERE id = %s
+        """, (new_hash, current_user["sub"]))
+
+        conn.commit()
+
+        return {"message": "Contraseña actualizada correctamente"}
+
+    except HTTPException:
+        conn.rollback()
+        raise
+    except psycopg2.Error as e:
+        conn.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error de base de datos: {e}"
+        )
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al cambiar la contraseña: {e}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
 
 @router.get("/{user_id}")
 async def get_user(user_id: UUID):
@@ -81,7 +159,6 @@ async def get_user(user_id: UUID):
         if cursor:
             cursor.close()
         conn.close()
-
 
 
 @router.put("/{user_id}")
