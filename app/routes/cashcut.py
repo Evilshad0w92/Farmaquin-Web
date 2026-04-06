@@ -282,6 +282,26 @@ def close_cashcut(data: CashcutClose, current_user: dict = Depends(get_current_u
             for row in sales_detail_rows
         ]
 
+        #Gets products sold since the last boxcut
+        cursor.execute("""
+            SELECT p.name, SUM(si.qty) AS total_qty, SUM((si.price - si.discount_amount) * si.qty) AS total_amount
+            FROM sale_items si JOIN sales s ON si.sale_id = s.id
+                               JOIN products p ON si.product_id = p.id
+            WHERE s.box_id = %s AND s.created_at > %s AND s.created_at <= %s
+            GROUP BY p.name ORDER BY p.name ASC
+        """, (current_user["box_id"], from_ts, to_ts))
+
+        product_rows = cursor.fetchall()
+
+        products_summary = [
+            {
+                "description": row[0],
+                "quantity": int(row[1] or 0),
+                "total": str(row[2] or Decimal("0.00")),
+            }
+            for row in product_rows
+        ]
+
         # Insert new cash cut record
         cursor.execute("""INSERT INTO cash_cuts(from_ts, to_ts,
                                                 total, total_cash, total_card, total_transfer,
@@ -315,13 +335,14 @@ def close_cashcut(data: CashcutClose, current_user: dict = Depends(get_current_u
             "total_returns_card": str(total_returns_card),
             "total_returns_transfer": str(total_returns_transfer),
             "total_sales": str(net_total),
-            "cash_expeted": str(cash_expected),
+            "cash_expected": str(cash_expected),
             "cash_counted": str(cash_counted),
             "difference": str(difference),
             "comment": data.comment,
 
             "ticket_type": "cashcut",
-            "sales_detail": sales_detail
+            "sales_detail": sales_detail,
+            "products_summary": products_summary
         }
     
     except Exception as e:
