@@ -207,7 +207,7 @@ def delete_expense(expense_id: int, current_user: dict = Depends(get_current_use
             )
 
         conn.commit()
-        return
+        return {"message": "Gasto eliminado exitosamente"}
 
     except HTTPException:
         conn.rollback()
