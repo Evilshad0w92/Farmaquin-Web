@@ -88,7 +88,7 @@ def search(query: str = "", current_user: dict = Depends(get_current_user)):
             SELECT id, amount, description, created_at, expense_type
             FROM expenses
             WHERE box_id = %s
-              AND (description ILIKE %s OR expense_type ILIKE %s)
+              AND (description ILIKE %s OR expense_type ILIKE %s) AND active = TRUE
         """, (box_id, f"%{query}%", f"%{query}%"))
 
         rows = cursor.fetchall()
@@ -195,7 +195,7 @@ def delete_expense(expense_id: int, current_user: dict = Depends(get_current_use
         cursor.execute("""
             UPDATE expenses
             SET active = FALSE 
-            WHERE id = %s AND box_id = %s
+            WHERE id = %s AND box_id = %s AND active = TRUE
             RETURNING id
         """, (expense_id, box_id))
 
