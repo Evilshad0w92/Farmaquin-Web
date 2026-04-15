@@ -109,8 +109,7 @@ def preview_cashcut(current_user: dict = Depends(get_current_user)):
             FROM expenses
             WHERE box_id = %s
             AND created_at > %s
-            AND created_at <= %s
-        """, (current_user["box_id"], from_ts, to_ts))
+            AND created_at <= %s AND active = TRUE""", (current_user["box_id"], from_ts, to_ts))
 
         expenses_row = cursor.fetchone() or (Decimal("0.00"), 0)
 

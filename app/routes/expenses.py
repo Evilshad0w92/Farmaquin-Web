@@ -178,7 +178,7 @@ def update_expense(expense: ExpenseUpdate, current_user: dict = Depends(get_curr
         cursor.close()
         conn.close()
 
-@router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{expense_id}", status_code=status.HTTP_200_OK)
 def delete_expense(expense_id: int, current_user: dict = Depends(get_current_user)):
     conn = get_conn()
     if conn is None:
