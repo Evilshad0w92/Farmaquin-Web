@@ -601,6 +601,58 @@ def delete_batch(batch_id: int, current_user: dict = Depends(get_current_user)):
         conn.close()
 
 
+@router.get("/batches")
+def search_batches(query: str = "", current_user: dict = Depends(get_current_user)):
+    conn = get_conn()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")
+    cursor = conn.cursor()
+
+    try:
+        box_id = current_user["box_id"]
+
+        cursor.execute("""
+            SELECT pb.id, pb.product_id, p.name, p.formula, p.lab_name,
+                   pb.lot, pb.qty, pb.cost, pb.expiration_date, pb.created_at
+            FROM product_batches pb
+            JOIN products p ON pb.product_id = p.id
+            JOIN boxes b ON p.location_id = b.location_id
+            WHERE b.id = %s
+              AND pb.active = true
+              AND (
+                    p.name ILIKE %s
+                    OR p.formula ILIKE %s
+                    OR pb.lot ILIKE %s
+              )
+            ORDER BY pb.created_at DESC
+            LIMIT 100
+        """, (box_id, f"%{query}%", f"%{query}%", f"%{query}%"))
+
+        rows = cursor.fetchall()
+
+        return [
+            {
+                "id": row[0],
+                "product_id": row[1],
+                "product_name": row[2],
+                "formula": row[3],
+                "lab_name": row[4],
+                "lot": row[5],
+                "qty": row[6],
+                "cost": str(row[7]),
+                "expiration_date": str(row[8]) if row[8] else None,
+                "created_at": str(row[9]),
+            }
+            for row in rows
+        ]
+
+    except psycopg2.Error as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error de base de datos: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.get("/labs", response_model=list[labListResponse])
 def get_lab_names(current_user: dict = Depends(get_current_user)):
     conn = get_conn()
