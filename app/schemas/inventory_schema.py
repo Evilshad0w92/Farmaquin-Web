@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, Optional
+from datetime import date
 
 class InventoryAdjustmentCreate(BaseModel):
     product_id: int
@@ -22,6 +23,8 @@ class InventoryRestockCreate(BaseModel):
     unit_cost: float
     sell_price: float
     provider_id: int
+    lot: str
+    expiration_date: Optional[date] = None
 
 class InventoryRestockResponse(BaseModel):
     id: int
@@ -46,6 +49,9 @@ class InventoryNewItemCreate(BaseModel):
     min_stock: int
     section_id: int
     provider_id: int
+    lot: str
+    expiration_date: Optional[date] = None
+    content: Optional[str] = None
 
 class InventoryNewItemResponse(BaseModel):
     id: int
@@ -64,8 +70,9 @@ class InventoryNewItemResponse(BaseModel):
     provider_name: str
     location_id: int
     location_name: str
+    content: Optional[str]
     created_at: str
-    
+
 class InventoryEditCreate(BaseModel):
     product_id: int
     name: str
@@ -77,6 +84,7 @@ class InventoryEditCreate(BaseModel):
     min_stock: int
     section_id: int
     provider_id: int
+    content: Optional[str] = None
 
 class InventoryEditResponse(BaseModel):
     id: int
@@ -90,7 +98,23 @@ class InventoryEditResponse(BaseModel):
     min_stock: int
     section_id: int
     provider_id: int
+    content: Optional[str]
     created_at: str
 
 class labListResponse(BaseModel):
     lab_name: str
+
+class ProductBatchEditCreate(BaseModel):
+    qty: int
+    cost: float
+    lot: str
+    expiration_date: Optional[date] = None
+
+class ProductBatchEditResponse(BaseModel):
+    id: int
+    product_id: int
+    qty: int
+    cost: str
+    lot: str
+    expiration_date: Optional[date]
+    created_at: str

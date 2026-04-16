@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.db.connection import get_conn
 from app.core.security.deps import get_current_user
-from app.schemas.inventory_schema import InventoryAdjustmentCreate, InventoryAdjustmentResponse, InventoryNewItemCreate, InventoryNewItemResponse, InventoryRestockCreate,InventoryRestockResponse, InventoryEditCreate, InventoryEditResponse, labListResponse
+from app.schemas.inventory_schema import InventoryAdjustmentCreate, InventoryAdjustmentResponse, InventoryNewItemCreate, InventoryNewItemResponse, InventoryRestockCreate,InventoryRestockResponse, InventoryEditCreate, InventoryEditResponse, labListResponse, ProductBatchEditCreate, ProductBatchEditResponse
 from decimal import Decimal, ROUND_HALF_UP
 import psycopg2
 
@@ -23,22 +23,7 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
         box_id = current_user["box_id"]
 
         sql = """
-            SELECT 
-                p.id,
-                p.barcode,
-                p.name,
-                p.formula,
-                p.stock,
-                p.price_sell,
-                p.lab_name,
-                s.name,
-                p.method,
-                p.active,
-                p.cost,
-                pr.name,
-                pr.id,
-                p.section_id,
-                p.min_stock
+            SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.lab_name, s.name, p.method, p.active, p.cost, pr.name, pr.id, p.section_id, p.min_stock
             FROM products p
             JOIN boxes b ON p.location_id = b.location_id
             LEFT JOIN sections s ON p.section_id = s.id
@@ -55,7 +40,7 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
         params = [box_id, f"%{query}%", f"%{query}%", f"%{query}%"]
 
         if low_stock:
-            sql += " AND p.stock < 5"
+            sql += " AND p.stock < p.min_stock"
 
         sql += " ORDER BY p.name LIMIT 20"
 
@@ -207,13 +192,17 @@ def restock_inventory(data: InventoryRestockCreate, current_user: dict = Depends
         # Update product stock and insert restock record in a transaction
         cursor.execute("""UPDATE products SET stock = %s, cost = %s, price_sell = %s WHERE id = %s""", (new_stock, unit_cost, data.sell_price, data.product_id))
 
-        cursor.execute("""INSERT INTO inventory_restock (product_id, box_id, user_id, provider_id, unit_cost, price_sell, quantity) 
+        cursor.execute("""INSERT INTO inventory_restock (product_id, box_id, user_id, provider_id, unit_cost, price_sell, quantity)
                           VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, created_at""", (data.product_id, box_id, user_id, provider_id, unit_cost, data.sell_price, data.quantity))
-        
+
         restock_row = cursor.fetchone()
 
         if restock_row is None:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al registrar el reabastecimiento de inventario") 
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al registrar el reabastecimiento de inventario")
+
+        cursor.execute("""INSERT INTO product_batches (product_id, qty, expiration_date, cost, lot)
+                          VALUES (%s, %s, %s, %s, %s)""", (data.product_id, data.quantity, data.expiration_date, unit_cost, data.lot))
+
         conn.commit()
 
         return InventoryRestockResponse(
@@ -305,14 +294,14 @@ def create_inventory(data: InventoryNewItemCreate, current_user: dict = Depends(
         cursor.execute("""
             INSERT INTO products (
                 barcode, name, formula, lab_name, method, cost, price_sell,
-                stock, min_stock, section_id, provider_id, location_id
+                stock, min_stock, section_id, provider_id, location_id, content
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id, created_at
         """, (
             data.barcode, data.name, data.formula, data.lab_name, data.method,
             unit_cost, sell_price, data.stock, data.min_stock,
-            section_id, provider_id, location_id
+            section_id, provider_id, location_id, data.content
         ))
         product_row = cursor.fetchone()
         if product_row is None:
@@ -328,15 +317,22 @@ def create_inventory(data: InventoryNewItemCreate, current_user: dict = Depends(
         ))
 
         cursor.execute("""
+            INSERT INTO product_batches (product_id, qty, expiration_date, cost, lot)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (
+            product_row[0], data.stock, data.expiration_date, unit_cost, data.lot
+        ))
+
+        cursor.execute("""
             INSERT INTO inventory_edit (
                 product_id, name, formula, lab_name, method, cost, price_sell,
-                min_stock, section_id, provider_id, location_id, box_id, user_id
+                min_stock, section_id, provider_id, location_id, box_id, user_id, content
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             product_row[0], data.name, data.formula, data.lab_name, data.method,
             unit_cost, sell_price, data.min_stock, section_id,
-            provider_id, location_id, box_id, user_id
+            provider_id, location_id, box_id, user_id, data.content
         ))
 
         conn.commit()
@@ -358,6 +354,7 @@ def create_inventory(data: InventoryNewItemCreate, current_user: dict = Depends(
             provider_name=provider_name,
             location_id=location_id,
             location_name=location_name,
+            content=data.content,
             created_at=str(product_row[1]),
         )
 
@@ -448,15 +445,15 @@ def edit_inventory(data: InventoryEditCreate, current_user: dict = Depends(get_c
 
         # Update product
         cursor.execute("""UPDATE products
-                          SET name = %s, formula = %s, lab_name = %s, method = %s, cost = %s, price_sell = %s, min_stock = %s, section_id = %s, provider_id = %s, location_id = %s
-                          WHERE id = %s""", (data.name, data.formula, data.lab_name, data.method, unit_cost, sell_price, data.min_stock, section_id, provider_id, location_id, data.product_id))
+                          SET name = %s, formula = %s, lab_name = %s, method = %s, cost = %s, price_sell = %s, min_stock = %s, section_id = %s, provider_id = %s, location_id = %s, content = %s
+                          WHERE id = %s""", (data.name, data.formula, data.lab_name, data.method, unit_cost, sell_price, data.min_stock, section_id, provider_id, location_id, data.content, data.product_id))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se pudo actualizar el producto")
 
         # Insert a record in the product's history
-        cursor.execute("""INSERT INTO inventory_edit (product_id, name, formula, lab_name, method, cost, price_sell, min_stock, section_id, provider_id, location_id, box_id, user_id)
-                          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                          RETURNING id, created_at""", (data.product_id, data.name, data.formula, data.lab_name, data.method, unit_cost, sell_price, data.min_stock, section_id, provider_id, location_id, box_id, user_id))
+        cursor.execute("""INSERT INTO inventory_edit (product_id, name, formula, lab_name, method, cost, price_sell, min_stock, section_id, provider_id, location_id, box_id, user_id, content)
+                          VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                          RETURNING id, created_at""", (data.product_id, data.name, data.formula, data.lab_name, data.method, unit_cost, sell_price, data.min_stock, section_id, provider_id, location_id, box_id, user_id, data.content))
         history_row = cursor.fetchone()
         if history_row is None:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al registrar el historial de edición")
@@ -474,6 +471,7 @@ def edit_inventory(data: InventoryEditCreate, current_user: dict = Depends(get_c
             min_stock=data.min_stock,
             section_id=section_id,
             provider_id=provider_id,
+            content=data.content,
             created_at=str(history_row[1]),
         )
 
@@ -489,6 +487,119 @@ def edit_inventory(data: InventoryEditCreate, current_user: dict = Depends(get_c
     finally:
         cursor.close()
         conn.close()
+
+@router.put("/batch/{batch_id}", response_model=ProductBatchEditResponse)
+def edit_batch(batch_id: int, data: ProductBatchEditCreate, current_user: dict = Depends(get_current_user)):
+    conn = get_conn()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")
+    cursor = conn.cursor()
+    q = Decimal("0.01")
+
+    try:
+        box_id = current_user["box_id"]
+
+        if data.qty <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La cantidad debe ser mayor a cero")
+
+        cost = Decimal(str(data.cost)).quantize(q, rounding=ROUND_HALF_UP)
+
+        if cost <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El costo debe ser mayor a cero")
+
+        if data.lot.strip() == "":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El lote no puede estar vacío")
+
+        # Verify the batch belongs to a product in the current user's location
+        cursor.execute("""
+            SELECT pb.id, pb.product_id, pb.created_at
+            FROM product_batches pb
+            JOIN products p ON pb.product_id = p.id
+            JOIN boxes b ON p.location_id = b.location_id
+            WHERE pb.id = %s AND b.id = %s
+            FOR UPDATE
+        """, (batch_id, box_id))
+        batch_row = cursor.fetchone()
+        if not batch_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lote no encontrado")
+
+        product_id = batch_row[1]
+        created_at = batch_row[2]
+
+        cursor.execute("""
+            UPDATE product_batches
+            SET qty = %s, cost = %s, lot = %s, expiration_date = %s
+            WHERE id = %s
+        """, (data.qty, cost, data.lot, data.expiration_date, batch_id))
+
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se pudo actualizar el lote")
+
+        conn.commit()
+
+        return ProductBatchEditResponse(
+            id=batch_id,
+            product_id=product_id,
+            qty=data.qty,
+            cost=str(cost),
+            lot=data.lot,
+            expiration_date=data.expiration_date,
+            created_at=str(created_at),
+        )
+
+    except HTTPException:
+        conn.rollback()
+        raise
+    except psycopg2.Error as e:
+        conn.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error de base de datos: {e}")
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al actualizar lote: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/batch/{batch_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_batch(batch_id: int, current_user: dict = Depends(get_current_user)):
+    conn = get_conn()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")
+    cursor = conn.cursor()
+
+    try:
+        box_id = current_user["box_id"]
+
+        # Verify the batch belongs to a product in the current user's location
+        cursor.execute("""
+            SELECT pb.id
+            FROM product_batches pb
+            JOIN products p ON pb.product_id = p.id
+            JOIN boxes b ON p.location_id = b.location_id
+            WHERE pb.id = %s AND b.id = %s AND pb.active = true
+            FOR UPDATE
+        """, (batch_id, box_id))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lote no encontrado o ya desactivado")
+
+        cursor.execute("UPDATE product_batches SET active = false WHERE id = %s", (batch_id,))
+
+        conn.commit()
+
+    except HTTPException:
+        conn.rollback()
+        raise
+    except psycopg2.Error as e:
+        conn.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error de base de datos: {e}")
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error al desactivar lote: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
 
 @router.get("/labs", response_model=list[labListResponse])
 def get_lab_names(current_user: dict = Depends(get_current_user)):
