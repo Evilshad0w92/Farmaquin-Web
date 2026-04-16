@@ -200,8 +200,8 @@ def restock_inventory(data: InventoryRestockCreate, current_user: dict = Depends
         if restock_row is None:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al registrar el reabastecimiento de inventario")
 
-        cursor.execute("""INSERT INTO product_batches (product_id, qty, expiration_date, cost, lot)
-                          VALUES (%s, %s, %s, %s, %s)""", (data.product_id, data.quantity, data.expiration_date, unit_cost, data.lot))
+        cursor.execute("""INSERT INTO product_batches (product_id, qty, expiration_date, lot)
+                          VALUES (%s, %s, %s, %s)""", (data.product_id, data.quantity, data.expiration_date, data.lot))
 
         conn.commit()
 
@@ -317,10 +317,10 @@ def create_inventory(data: InventoryNewItemCreate, current_user: dict = Depends(
         ))
 
         cursor.execute("""
-            INSERT INTO product_batches (product_id, qty, expiration_date, cost, lot)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO product_batches (product_id, qty, expiration_date, lot)
+            VALUES (%s, %s, %s, %s)
         """, (
-            product_row[0], data.stock, data.expiration_date, unit_cost, data.lot
+            product_row[0], data.stock, data.expiration_date, data.lot
         ))
 
         cursor.execute("""
@@ -494,18 +494,12 @@ def edit_batch(batch_id: int, data: ProductBatchEditCreate, current_user: dict =
     if conn is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")
     cursor = conn.cursor()
-    q = Decimal("0.01")
 
     try:
         box_id = current_user["box_id"]
 
         if data.qty <= 0:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La cantidad debe ser mayor a cero")
-
-        cost = Decimal(str(data.cost)).quantize(q, rounding=ROUND_HALF_UP)
-
-        if cost <= 0:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El costo debe ser mayor a cero")
 
         if data.lot.strip() == "":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El lote no puede estar vacío")
@@ -528,9 +522,9 @@ def edit_batch(batch_id: int, data: ProductBatchEditCreate, current_user: dict =
 
         cursor.execute("""
             UPDATE product_batches
-            SET qty = %s, cost = %s, lot = %s, expiration_date = %s
+            SET qty = %s, lot = %s, expiration_date = %s
             WHERE id = %s
-        """, (data.qty, cost, data.lot, data.expiration_date, batch_id))
+        """, (data.qty, data.lot, data.expiration_date, batch_id))
 
         if cursor.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se pudo actualizar el lote")
@@ -541,7 +535,6 @@ def edit_batch(batch_id: int, data: ProductBatchEditCreate, current_user: dict =
             id=batch_id,
             product_id=product_id,
             qty=data.qty,
-            cost=str(cost),
             lot=data.lot,
             expiration_date=data.expiration_date,
             created_at=str(created_at),
@@ -561,7 +554,7 @@ def edit_batch(batch_id: int, data: ProductBatchEditCreate, current_user: dict =
         conn.close()
 
 
-@router.delete("/batch/{batch_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/batch/{batch_id}")
 def delete_batch(batch_id: int, current_user: dict = Depends(get_current_user)):
     conn = get_conn()
     if conn is None:
@@ -586,6 +579,7 @@ def delete_batch(batch_id: int, current_user: dict = Depends(get_current_user)):
         cursor.execute("UPDATE product_batches SET active = false WHERE id = %s", (batch_id,))
 
         conn.commit()
+        return {"ok": True}
 
     except HTTPException:
         conn.rollback()
@@ -613,7 +607,7 @@ def search_batches(query: str = "", current_user: dict = Depends(get_current_use
 
         cursor.execute("""
             SELECT pb.id, pb.product_id, p.name, p.formula, p.lab_name,
-                   pb.lot, pb.qty, pb.cost, pb.expiration_date, pb.created_at
+                   pb.lot, pb.qty, pb.expiration_date, pb.created_at
             FROM product_batches pb
             JOIN products p ON pb.product_id = p.id
             JOIN boxes b ON p.location_id = b.location_id
@@ -639,9 +633,8 @@ def search_batches(query: str = "", current_user: dict = Depends(get_current_use
                 "lab_name": row[4],
                 "lot": row[5],
                 "qty": row[6],
-                "cost": str(row[7]),
-                "expiration_date": str(row[8]) if row[8] else None,
-                "created_at": str(row[9]),
+                "expiration_date": str(row[7]) if row[7] else None,
+                "created_at": str(row[8]),
             }
             for row in rows
         ]

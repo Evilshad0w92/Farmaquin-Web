@@ -106,7 +106,6 @@ class labListResponse(BaseModel):
 
 class ProductBatchEditCreate(BaseModel):
     qty: int
-    cost: float
     lot: str
     expiration_date: Optional[date] = None
 
@@ -114,7 +113,6 @@ class ProductBatchEditResponse(BaseModel):
     id: int
     product_id: int
     qty: int
-    cost: str
     lot: str
     expiration_date: Optional[date]
     created_at: str
