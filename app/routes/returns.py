@@ -268,7 +268,7 @@ def get_return_ticket(returns_id: int, current_user: dict = Depends(get_current_
 
     try:
         cursor.execute("""
-            SELECT r.id, r.total, r.created_at, u.username, l.name, l.address
+            SELECT r.id, r.total, r.created_at, u.name, l.name, l.address
             FROM returns r
             JOIN users u ON r.processed_by = u.id
             JOIN boxes b ON r.box_id = b.id

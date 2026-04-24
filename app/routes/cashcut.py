@@ -120,10 +120,24 @@ def preview_cashcut(current_user: dict = Depends(get_current_user)):
         net_total = total_sales - total_returns
         cash_expected = total_cash - total_returns_cash - total_expenses + last_counted
 
+        cursor.execute("""
+            SELECT p.name, SUM(si.qty) AS total_qty,
+                   SUM((si.price - si.discount_amount) * si.qty) AS total_amount
+            FROM sale_items si
+            JOIN sales s ON si.sale_id = s.id
+            JOIN products p ON si.product_id = p.id
+            WHERE s.box_id = %s AND s.created_at > %s AND s.created_at <= %s
+            GROUP BY p.name ORDER BY p.name ASC
+        """, (current_user["box_id"], from_ts, to_ts))
+        products_summary = [
+            {"description": r[0], "quantity": int(r[1] or 0), "total": str(r[2] or "0.00")}
+            for r in cursor.fetchall()
+        ]
+
         return {
             "from_ts": str(from_ts),
             "to_ts": str(to_ts),
-            "total_sales": str(total_sales),
+            "total_sales": str(net_total),
             "sales_count": sales_count,
             "total_returns": str(total_returns),
             "returns_count": returns_count,
@@ -136,7 +150,7 @@ def preview_cashcut(current_user: dict = Depends(get_current_user)):
             "total_returns_card": str(total_returns_card),
             "total_returns_transfer": str(total_returns_transfer),
             "cash_expected": str(cash_expected),
-            "total_sales": str(net_total)
+            "products_summary": products_summary,
         }
 
         

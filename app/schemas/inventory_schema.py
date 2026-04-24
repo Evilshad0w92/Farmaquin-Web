@@ -52,6 +52,7 @@ class InventoryNewItemCreate(BaseModel):
     lot: str
     expiration_date: Optional[date] = None
     content: Optional[str] = None
+    is_service: bool = False
 
 class InventoryNewItemResponse(BaseModel):
     id: int
@@ -71,6 +72,7 @@ class InventoryNewItemResponse(BaseModel):
     location_id: int
     location_name: str
     content: Optional[str]
+    is_service: bool
     created_at: str
 
 class InventoryEditCreate(BaseModel):
@@ -85,6 +87,7 @@ class InventoryEditCreate(BaseModel):
     section_id: int
     provider_id: int
     content: Optional[str] = None
+    is_service: bool = False
 
 class InventoryEditResponse(BaseModel):
     id: int
@@ -99,6 +102,7 @@ class InventoryEditResponse(BaseModel):
     section_id: int
     provider_id: int
     content: Optional[str]
+    is_service: bool
     created_at: str
 
 class labListResponse(BaseModel):

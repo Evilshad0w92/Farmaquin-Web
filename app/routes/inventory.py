@@ -23,7 +23,7 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
         box_id = current_user["box_id"]
 
         sql = """
-            SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.lab_name, s.name, p.method, p.active, p.cost, pr.name, pr.id, p.section_id, p.min_stock
+            SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.lab_name, s.name, p.method, p.active, p.cost, pr.name, pr.id, p.section_id, p.min_stock, p.is_service
             FROM products p
             JOIN boxes b ON p.location_id = b.location_id
             LEFT JOIN sections s ON p.section_id = s.id
@@ -64,6 +64,7 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
                 "provider_id": row[12],
                 "section_id": row[13],
                 "min_stock": row[14],
+                "is_service": row[15],
             }
             for row in rows
         ]
@@ -294,14 +295,14 @@ def create_inventory(data: InventoryNewItemCreate, current_user: dict = Depends(
         cursor.execute("""
             INSERT INTO products (
                 barcode, name, formula, lab_name, method, cost, price_sell,
-                stock, min_stock, section_id, provider_id, location_id, content
+                stock, min_stock, section_id, provider_id, location_id, content, is_service
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id, created_at
         """, (
             data.barcode, data.name, data.formula, data.lab_name, data.method,
             unit_cost, sell_price, data.stock, data.min_stock,
-            section_id, provider_id, location_id, data.content
+            section_id, provider_id, location_id, data.content, data.is_service
         ))
         product_row = cursor.fetchone()
         if product_row is None:
@@ -355,6 +356,7 @@ def create_inventory(data: InventoryNewItemCreate, current_user: dict = Depends(
             location_id=location_id,
             location_name=location_name,
             content=data.content,
+            is_service=data.is_service,
             created_at=str(product_row[1]),
         )
 
@@ -445,8 +447,8 @@ def edit_inventory(data: InventoryEditCreate, current_user: dict = Depends(get_c
 
         # Update product
         cursor.execute("""UPDATE products
-                          SET name = %s, formula = %s, lab_name = %s, method = %s, cost = %s, price_sell = %s, min_stock = %s, section_id = %s, provider_id = %s, location_id = %s, content = %s
-                          WHERE id = %s""", (data.name, data.formula, data.lab_name, data.method, unit_cost, sell_price, data.min_stock, section_id, provider_id, location_id, data.content, data.product_id))
+                          SET name = %s, formula = %s, lab_name = %s, method = %s, cost = %s, price_sell = %s, min_stock = %s, section_id = %s, provider_id = %s, location_id = %s, content = %s, is_service = %s
+                          WHERE id = %s""", (data.name, data.formula, data.lab_name, data.method, unit_cost, sell_price, data.min_stock, section_id, provider_id, location_id, data.content, data.is_service, data.product_id))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se pudo actualizar el producto")
 
@@ -472,6 +474,7 @@ def edit_inventory(data: InventoryEditCreate, current_user: dict = Depends(get_c
             section_id=section_id,
             provider_id=provider_id,
             content=data.content,
+            is_service=data.is_service,
             created_at=str(history_row[1]),
         )
 

@@ -51,9 +51,9 @@ def create_sale(sale: SaleCreate, current_user: dict = Depends(get_current_user)
 
             #Bloqueo products 
             cursor.execute("""
-                            SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active
+                            SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active, p.is_service
                             FROM products p JOIN boxes b ON p.location_id = b.location_id
-                            WHERE p.id = %s  
+                            WHERE p.id = %s
                             AND b.id= %s FOR UPDATE""",(product_id, current_user["box_id"]))
             product_row = cursor.fetchone()
 
@@ -63,7 +63,9 @@ def create_sale(sale: SaleCreate, current_user: dict = Depends(get_current_user)
             if product_row[6] is False:
                 raise HTTPException(status_code=400, detail=f"El producto {product_row[2]} está inactivo")
 
-            if product_row[4] < quantity:
+            is_service = product_row[7]
+
+            if not is_service and product_row[4] < quantity:
                 raise HTTPException(status_code=409, detail=f"Stock insuficiente para {product_row[2]}")
 
             # Descuento 
@@ -92,8 +94,9 @@ def create_sale(sale: SaleCreate, current_user: dict = Depends(get_current_user)
             cursor.execute("INSERT INTO sale_items (sale_id, product_id, qty, price, discount_amount,stock_before) " \
                            "VALUES (%s, %s, %s, %s, %s, %s)", (sale_id, product_id, quantity, unit_price, discount_amount, stock_before))  
             
-            # Actualizar stock
-            cursor.execute("UPDATE products SET stock = stock - %s WHERE id = %s", (quantity, product_id))
+            # Actualizar stock solo si no es un servicio
+            if not is_service:
+                cursor.execute("UPDATE products SET stock = stock - %s WHERE id = %s", (quantity, product_id))
 
             total += line_total
 
@@ -245,7 +248,7 @@ def get_sale_ticket(sale_id: int, current_user: dict = Depends(get_current_user)
 
         # venta + caja + sucursal + usuario
 
-        cursor.execute("""SELECT s.id, s.total, s.payment_method, s.created_at, s.cash_received, s.change_given, u.username, l.name, l.address
+        cursor.execute("""SELECT s.id, s.total, s.payment_method, s.created_at, s.cash_received, s.change_given, u.name, l.name, l.address
                           FROM sales s
                           JOIN users u ON s.sold_by = u.id
                           JOIN boxes b ON s.box_id = b.id

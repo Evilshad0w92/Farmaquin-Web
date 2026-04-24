@@ -16,7 +16,7 @@ async def login(request: LoginRequest):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="No se pudo conectar a la base de datos")
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, password_hash, role_id,active FROM users WHERE username = %s", (request.username,))
+        cursor.execute("SELECT id, username, password_hash, role_id, active, name FROM users WHERE username = %s", (request.username,))
         row = cursor.fetchone()
 
         cursor.execute("SELECT id, active FROM boxes WHERE id = %s", (request.box_id,))
@@ -41,6 +41,7 @@ async def login(request: LoginRequest):
             payload = {
                 "sub": str(row[0]),
                 "username": row[1],
+                "name": row[5],
                 "role_id": row[3],
                 "box_id": box_row[0]
             }       
