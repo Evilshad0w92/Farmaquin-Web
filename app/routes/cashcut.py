@@ -3,6 +3,7 @@ from app.db.connection import get_conn
 from app.core.security.deps import get_current_user
 from decimal import Decimal, ROUND_HALF_UP
 from app.schemas.cashcut_schema import CashcutClose
+from app.utils.email_report import send_cashcut_report
 
 router = APIRouter(prefix="/cashcut", tags=["cashcut"])
 
@@ -315,6 +316,49 @@ def close_cashcut(data: CashcutClose, current_user: dict = Depends(get_current_u
             for row in product_rows
         ]
 
+        # Fetch expense details for the email report
+        cursor.execute("""
+            SELECT description, expense_type, amount
+            FROM expenses
+            WHERE box_id = %s AND created_at > %s AND created_at <= %s AND active = TRUE
+            ORDER BY created_at ASC
+        """, (current_user["box_id"], from_ts, to_ts))
+        expenses_detail = [
+            {"description": r[0], "expense_type": r[1], "amount": str(r[2] or "0.00")}
+            for r in cursor.fetchall()
+        ]
+
+        # Fetch low-stock products for the email report
+        cursor.execute("""
+            SELECT p.name, bi.stock, bi.min_stock
+            FROM branch_inventory bi
+            JOIN products p ON p.id = bi.product_id
+            JOIN boxes b    ON b.location_id = bi.location_id
+            WHERE b.id = %s AND bi.active = true AND p.is_service = false AND bi.stock <= bi.min_stock
+            ORDER BY (bi.stock::float / NULLIF(bi.min_stock, 0)) ASC
+            LIMIT 20
+        """, (current_user["box_id"],))
+        low_stock = [{"name": r[0], "stock": r[1], "min_stock": r[2]} for r in cursor.fetchall()]
+
+        # Fetch batches expiring within 60 days for the email report
+        cursor.execute("""
+            SELECT p.name, pb.lot, pb.expiration_date, pb.qty,
+                   (pb.expiration_date - CURRENT_DATE) AS days_left
+            FROM product_batches pb
+            JOIN products p ON p.id = pb.product_id
+            JOIN boxes b    ON b.location_id = pb.location_id
+            WHERE b.id = %s AND pb.active = true
+              AND pb.expiration_date IS NOT NULL
+              AND pb.expiration_date <= CURRENT_DATE + INTERVAL '60 days'
+            ORDER BY pb.expiration_date ASC
+            LIMIT 20
+        """, (current_user["box_id"],))
+        expiring = [
+            {"name": r[0], "lot": r[1], "expiration_date": str(r[2]),
+             "qty": r[3], "days_left": r[4].days if r[4] is not None else 0}
+            for r in cursor.fetchall()
+        ]
+
         # Insert new cash cut record
         cursor.execute("""INSERT INTO cash_cuts(from_ts, to_ts,
                                                 total, total_cash, total_card, total_transfer,
@@ -331,32 +375,43 @@ def close_cashcut(data: CashcutClose, current_user: dict = Depends(get_current_u
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al cerrar el corte de caja")
         cut_id = cut_id_row[0]
         
-        conn.commit()   
-        return {
-            "cut_id": cut_id,
-            "from_ts": str(from_ts),
-            "to_ts": str(to_ts),
-            "total_sales": str(total_sales),
-            "sales_count": sales_count,
-            "total_cash": str(total_cash),
-            "total_card": str(total_card),
-            "total_transfer": str(total_transfer),
+        conn.commit()
 
-            "total_returns": str(total_returns),
-            "returns_count": returns_count,
-            "total_returns_cash": str(total_returns_cash),
-            "total_returns_card": str(total_returns_card),
+        result = {
+            "cut_id":    cut_id,
+            "from_ts":   str(from_ts),
+            "to_ts":     str(to_ts),
+            "total_sales":          str(total_sales),
+            "net_total":            str(net_total),
+            "sales_count":          sales_count,
+            "total_cash":           str(total_cash),
+            "total_card":           str(total_card),
+            "total_transfer":       str(total_transfer),
+            "total_returns":        str(total_returns),
+            "returns_count":        returns_count,
+            "total_returns_cash":   str(total_returns_cash),
+            "total_returns_card":   str(total_returns_card),
             "total_returns_transfer": str(total_returns_transfer),
-            "total_sales": str(net_total),
-            "cash_expected": str(cash_expected),
-            "cash_counted": str(cash_counted),
-            "difference": str(difference),
-            "comment": data.comment,
-
-            "ticket_type": "cashcut",
-            "sales_detail": sales_detail,
-            "products_summary": products_summary
+            "total_expenses":       str(total_expenses),
+            "cash_expected":        str(cash_expected),
+            "cash_counted":         str(cash_counted),
+            "difference":           str(difference),
+            "comment":              data.comment,
+            "ticket_type":          "cashcut",
+            "sales_detail":         sales_detail,
+            "products_summary":     products_summary,
         }
+
+        # Send the email report in a background thread — does not block the response
+        send_cashcut_report(
+            cut=result,
+            products_summary=products_summary,
+            expenses_detail=expenses_detail,
+            low_stock=low_stock,
+            expiring=expiring,
+        )
+
+        return result
     
     except Exception as e:
         conn.rollback()

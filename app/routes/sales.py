@@ -49,12 +49,18 @@ def create_sale(sale: SaleCreate, current_user: dict = Depends(get_current_user)
             product_id = item.product_id
             quantity = item.quantity            
 
-            #Bloqueo products 
+            # Lock the branch_inventory row (bi) for this location so concurrent sales
+            # at the same branch cannot double-sell the same stock.
+            # bi.active and bi.stock come from branch_inventory, not products.
             cursor.execute("""
-                            SELECT p.id, p.barcode, p.name, p.formula, p.stock, p.price_sell, p.active, p.is_service
-                            FROM products p JOIN boxes b ON p.location_id = b.location_id
-                            WHERE p.id = %s
-                            AND b.id= %s FOR UPDATE""",(product_id, current_user["box_id"]))
+                SELECT p.id, p.barcode, p.name, p.formula,
+                       bi.stock, bi.price_sell, bi.active, p.is_service, bi.location_id
+                FROM products p
+                JOIN branch_inventory bi ON bi.product_id = p.id
+                JOIN boxes b             ON b.location_id = bi.location_id
+                WHERE p.id = %s AND b.id = %s
+                FOR UPDATE OF bi
+            """, (product_id, current_user["box_id"]))
             product_row = cursor.fetchone()
 
             if product_row is None:
@@ -79,6 +85,7 @@ def create_sale(sale: SaleCreate, current_user: dict = Depends(get_current_user)
             discount_value = discount_row[1] if discount_row else 0
 
             stock_before = product_row[4]
+            location_id  = product_row[8]   # needed for branch_inventory update below
             unit_price = product_row[5]
             if not isinstance(unit_price, Decimal):
                 unit_price = Decimal(str(unit_price))
@@ -94,9 +101,12 @@ def create_sale(sale: SaleCreate, current_user: dict = Depends(get_current_user)
             cursor.execute("INSERT INTO sale_items (sale_id, product_id, qty, price, discount_amount,stock_before) " \
                            "VALUES (%s, %s, %s, %s, %s, %s)", (sale_id, product_id, quantity, unit_price, discount_amount, stock_before))  
             
-            # Actualizar stock solo si no es un servicio
+            # Decrement stock in branch_inventory for this location only (not global products table)
             if not is_service:
-                cursor.execute("UPDATE products SET stock = stock - %s WHERE id = %s", (quantity, product_id))
+                cursor.execute(
+                    "UPDATE branch_inventory SET stock = stock - %s WHERE product_id = %s AND location_id = %s",
+                    (quantity, product_id, location_id)
+                )
 
             total += line_total
 
