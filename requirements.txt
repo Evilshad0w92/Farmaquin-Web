@@ -10,3 +10,4 @@ bcrypt==4.0.1
 requests
 Pillow
 python-jose[cryptography]
+xhtml2pdf

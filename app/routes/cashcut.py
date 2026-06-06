@@ -4,6 +4,7 @@ from app.core.security.deps import get_current_user
 from decimal import Decimal, ROUND_HALF_UP
 from app.schemas.cashcut_schema import CashcutClose
 from app.utils.email_report import send_cashcut_report
+from app.utils.whatsapp_report import send_whatsapp_report
 
 router = APIRouter(prefix="/cashcut", tags=["cashcut"])
 
@@ -404,6 +405,14 @@ def close_cashcut(data: CashcutClose, current_user: dict = Depends(get_current_u
 
         # Send the email report in a background thread — does not block the response
         send_cashcut_report(
+            cut=result,
+            products_summary=products_summary,
+            expenses_detail=expenses_detail,
+            low_stock=low_stock,
+            expiring=expiring,
+        )
+
+        send_whatsapp_report(
             cut=result,
             products_summary=products_summary,
             expenses_detail=expenses_detail,

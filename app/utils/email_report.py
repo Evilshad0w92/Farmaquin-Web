@@ -72,7 +72,7 @@ def _section(title: str, color: str, body: str) -> str:
             {body}
         </table>"""
 
-def _build_html(cut: dict, products: list, expenses: list, low_stock: list, expiring: list) -> str:
+def build_report_html(cut: dict, products: list, expenses: list, low_stock: list, expiring: list) -> str:
     # -- Resumen del corte --
     diff     = float(cut["difference"])
     diff_str = f'<span style="color:{"#dc2626" if diff < 0 else "#16a34a"};">{"−" if diff < 0 else "+"} ${abs(diff):,.2f}</span>'
@@ -189,5 +189,5 @@ def send_cashcut_report(
 ) -> None:
     """Build the HTML report and dispatch it in a daemon background thread."""
     subject = f"Farmaquin – Corte de Caja {_fmt_ts(cut['to_ts'])}"
-    html    = _build_html(cut, products_summary, expenses_detail, low_stock, expiring)
+    html    = build_report_html(cut, products_summary, expenses_detail, low_stock, expiring)
     threading.Thread(target=_send, args=(subject, html), daemon=True).start()
