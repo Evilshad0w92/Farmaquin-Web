@@ -19,7 +19,12 @@ async def login(request: LoginRequest):
         cursor.execute("SELECT id, username, password_hash, role_id, active, name FROM users WHERE username = %s", (request.username,))
         row = cursor.fetchone()
 
-        cursor.execute("SELECT id, active FROM boxes WHERE id = %s", (request.box_id,))
+        cursor.execute("""
+            SELECT b.id, b.active, b.name, l.name AS location_name
+            FROM boxes b
+            JOIN locations l ON l.id = b.location_id
+            WHERE b.id = %s
+        """, (request.box_id,))
         box_row = cursor.fetchone()
 
         if row is None:
@@ -43,7 +48,9 @@ async def login(request: LoginRequest):
                 "username": row[1],
                 "name": row[5],
                 "role_id": row[3],
-                "box_id": box_row[0]
+                "box_id": box_row[0],
+                "box_name": box_row[2],
+                "location_name": box_row[3],
             }       
             token = create_access_token(payload)
             return TokenResponse(access_token=token, token_type="bearer")

@@ -62,10 +62,10 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
                    COALESCE(bi.price_sell, 0) AS price_sell,
                    p.lab_name, s.name, p.method,
                    COALESCE(bi.active, true)  AS active,
-                   COALESCE(bi.unit_cost, 0)  AS unit_cost,
+                   COALESCE(p.cost, 0)        AS unit_cost,
                    pr.name, pr.id, bi.section_id,
                    COALESCE(bi.min_stock, 0)  AS min_stock,
-                   p.is_service
+                   p.is_service, p.content
             FROM products p
             CROSS JOIN (SELECT location_id FROM boxes WHERE id = %s) AS loc
             LEFT JOIN branch_inventory bi ON bi.product_id = p.id AND bi.location_id = loc.location_id
@@ -107,6 +107,7 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
                 "section_id": row[13],
                 "min_stock": row[14],
                 "is_service": row[15],
+                "content": row[16],
             }
             for row in rows
         ]
@@ -149,7 +150,7 @@ def adjust_inventory(data: InventoryAdjustmentCreate, current_user: dict = Depen
         """, (data.product_id, box_id))
         row = cursor.fetchone()
         if row is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Producto no encontrado")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="El producto no tiene stock en esta sucursal, es necesario resurtirlo.")
 
         current_stock = row[0]
         location_id   = row[1]
@@ -242,14 +243,16 @@ def restock_inventory(data: InventoryRestockCreate, current_user: dict = Depends
         if not cursor.fetchone():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Producto no encontrado")
 
+        # Sync global cost on restock
+        cursor.execute("UPDATE products SET cost = %s WHERE id = %s", (unit_cost, data.product_id))
+
         # UPSERT: creates branch_inventory if this is the first restock at this location,
-        # otherwise adds quantity to existing stock and updates cost/price.
+        # otherwise adds quantity to existing stock and updates price.
         cursor.execute("""
             INSERT INTO branch_inventory (product_id, location_id, stock, unit_cost, price_sell, active)
             VALUES (%s, %s, %s, %s, %s, true)
             ON CONFLICT (product_id, location_id) DO UPDATE
             SET stock      = branch_inventory.stock + EXCLUDED.stock,
-                unit_cost  = EXCLUDED.unit_cost,
                 price_sell = EXCLUDED.price_sell
             RETURNING stock
         """, (data.product_id, location_id, data.quantity, unit_cost, data.sell_price))
@@ -534,17 +537,17 @@ def edit_inventory(data: InventoryEditCreate, current_user: dict = Depends(get_c
         cursor.execute("""
             UPDATE products
             SET name = %s, formula = %s, lab_name = %s, method = %s,
-                provider_id = %s, content = %s, is_service = %s
+                provider_id = %s, content = %s, is_service = %s, cost = %s
             WHERE id = %s
         """, (data.name, data.formula, data.lab_name, data.method,
-              provider_id, data.content, data.is_service, data.product_id))
+              provider_id, data.content, data.is_service, unit_cost, data.product_id))
 
         # Update branch-specific fields in branch_inventory for this location only
         cursor.execute("""
             UPDATE branch_inventory
-            SET unit_cost = %s, price_sell = %s, min_stock = %s, section_id = %s
+            SET price_sell = %s, min_stock = %s, section_id = %s
             WHERE product_id = %s AND location_id = %s
-        """, (unit_cost, sell_price, data.min_stock, section_id, data.product_id, location_id))
+        """, (sell_price, data.min_stock, section_id, data.product_id, location_id))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No se pudo actualizar el producto")
 
@@ -809,7 +812,7 @@ def check_barcode(barcode: str, current_user: dict = Depends(get_current_user)):
             SELECT p.id, p.barcode, p.name, p.formula, p.lab_name,
                    COALESCE(bi.stock, 0)      AS stock,
                    COALESCE(bi.price_sell, 0) AS price_sell,
-                   COALESCE(bi.unit_cost, 0)  AS unit_cost,
+                   COALESCE(p.cost, 0)        AS unit_cost,
                    p.provider_id, bi.section_id,
                    COALESCE(bi.min_stock, 0)  AS min_stock,
                    p.is_service, p.method
