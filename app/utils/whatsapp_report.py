@@ -69,8 +69,14 @@ def _send_msg(payload: dict, token: str, phone_id: str) -> None:
         json=payload,
         timeout=15,
     )
-    if not resp.ok:
-        print(f"[whatsapp] Error al enviar mensaje ({resp.status_code}): {resp.text}")
+    try:
+        body = resp.json()
+    except Exception:
+        body = resp.text
+    if not resp.ok or (isinstance(body, dict) and "error" in body):
+        print(f"[whatsapp] Error al enviar mensaje ({resp.status_code}): {body}")
+    else:
+        print(f"[whatsapp] Mensaje enviado OK ({resp.status_code}): {body}")
 
 
 def _worker(cut: dict, products: list, expenses: list, low_stock: list, expiring: list) -> None:
@@ -87,7 +93,7 @@ def _worker(cut: dict, products: list, expenses: list, low_stock: list, expiring
     try:
         import io
         from xhtml2pdf import pisa
-        html      = build_report_html(cut, products, expenses, low_stock, expiring)
+        html      = build_report_html(cut, products, expenses, low_stock, expiring, for_pdf=True)
         buf       = io.BytesIO()
         pisa.CreatePDF(html, dest=buf)
         pdf_bytes = buf.getvalue()

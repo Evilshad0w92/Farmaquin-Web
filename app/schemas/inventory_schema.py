@@ -108,6 +108,12 @@ class InventoryEditResponse(BaseModel):
 class labListResponse(BaseModel):
     lab_name: str
 
+class ProductBatchCreate(BaseModel):
+    product_id: int
+    qty: int
+    lot: str
+    expiration_date: Optional[date] = None
+
 class ProductBatchEditCreate(BaseModel):
     qty: int
     lot: str

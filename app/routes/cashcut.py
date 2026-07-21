@@ -428,3 +428,148 @@ def close_cashcut(data: CashcutClose, current_user: dict = Depends(get_current_u
     finally:
         cursor.close()
         conn.close()
+
+
+@router.post("/resend/latest")
+def resend_latest_report(current_user: dict = Depends(get_current_user)):
+    """Re-sends the WhatsApp and email report for the most recent cash cut of this box."""
+    conn = get_conn()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")
+    cursor = conn.cursor()
+    try:
+        box_id = current_user["box_id"]
+        cursor.execute("SELECT id FROM cash_cuts WHERE box_id = %s ORDER BY to_ts DESC LIMIT 1", (box_id,))
+        row = cursor.fetchone()
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No hay cortes registrados para esta caja")
+        cut_id = row[0]
+    finally:
+        cursor.close()
+        conn.close()
+    return resend_report(cut_id, current_user)
+
+
+@router.post("/resend/{cut_id}")
+def resend_report(cut_id: int, current_user: dict = Depends(get_current_user)):
+    """Re-sends the WhatsApp and email report for an existing cash cut."""
+    conn = get_conn()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")
+    cursor = conn.cursor()
+
+    try:
+        box_id = current_user["box_id"]
+
+        cursor.execute("""
+            SELECT id, from_ts, to_ts, total, net_total, total_cash, total_card, total_transfer,
+                   total_returns, total_returns_cash, total_returns_card, total_returns_transfer,
+                   total_expenses, cash_expected, cash_counted, difference, comment, sales_count
+            FROM cash_cuts
+            WHERE id = %s AND box_id = %s
+        """, (cut_id, box_id))
+        row = cursor.fetchone()
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Corte no encontrado")
+
+        from_ts, to_ts = row[1], row[2]
+
+        cut = {
+            "cut_id":               row[0],
+            "from_ts":              str(from_ts),
+            "to_ts":                str(to_ts),
+            "total_sales":          str(row[3] or "0.00"),
+            "net_total":            str(row[4] or "0.00"),
+            "total_cash":           str(row[5] or "0.00"),
+            "total_card":           str(row[6] or "0.00"),
+            "total_transfer":       str(row[7] or "0.00"),
+            "total_returns":        str(row[8] or "0.00"),
+            "total_returns_cash":   str(row[9] or "0.00"),
+            "total_returns_card":   str(row[10] or "0.00"),
+            "total_returns_transfer": str(row[11] or "0.00"),
+            "total_expenses":       str(row[12] or "0.00"),
+            "cash_expected":        str(row[13] or "0.00"),
+            "cash_counted":         str(row[14] or "0.00"),
+            "difference":           str(row[15] or "0.00"),
+            "comment":              row[16] or "",
+            "sales_count":          row[17] or 0,
+            "ticket_type":          "cashcut",
+        }
+
+        cursor.execute("""
+            SELECT p.name, SUM(si.qty), SUM((si.price - si.discount_amount) * si.qty)
+            FROM sale_items si
+            JOIN sales s ON si.sale_id = s.id
+            JOIN products p ON si.product_id = p.id
+            WHERE s.box_id = %s AND s.created_at > %s AND s.created_at <= %s
+            GROUP BY p.name ORDER BY p.name
+        """, (box_id, from_ts, to_ts))
+        products_summary = [
+            {"description": r[0], "quantity": int(r[1] or 0), "total": str(r[2] or "0.00")}
+            for r in cursor.fetchall()
+        ]
+
+        cursor.execute("""
+            SELECT description, expense_type, amount
+            FROM expenses
+            WHERE box_id = %s AND created_at > %s AND created_at <= %s AND active = TRUE
+            ORDER BY created_at ASC
+        """, (box_id, from_ts, to_ts))
+        expenses_detail = [
+            {"description": r[0], "expense_type": r[1], "amount": str(r[2] or "0.00")}
+            for r in cursor.fetchall()
+        ]
+
+        cursor.execute("""
+            SELECT p.name, bi.stock, bi.min_stock
+            FROM branch_inventory bi
+            JOIN products p ON p.id = bi.product_id
+            JOIN boxes b    ON b.location_id = bi.location_id
+            WHERE b.id = %s AND bi.active = true AND p.is_service = false AND bi.stock <= bi.min_stock
+            ORDER BY (bi.stock::float / NULLIF(bi.min_stock, 0)) ASC
+            LIMIT 20
+        """, (box_id,))
+        low_stock = [{"name": r[0], "stock": r[1], "min_stock": r[2]} for r in cursor.fetchall()]
+
+        cursor.execute("""
+            SELECT p.name, pb.lot, pb.expiration_date, pb.qty,
+                   (pb.expiration_date - CURRENT_DATE) AS days_left
+            FROM product_batches pb
+            JOIN products p ON p.id = pb.product_id
+            JOIN boxes b    ON b.location_id = pb.location_id
+            WHERE b.id = %s AND pb.active = true
+              AND pb.expiration_date IS NOT NULL
+              AND pb.expiration_date <= CURRENT_DATE + INTERVAL '60 days'
+            ORDER BY pb.expiration_date ASC
+            LIMIT 20
+        """, (box_id,))
+        expiring = [
+            {"name": r[0], "lot": r[1], "expiration_date": str(r[2]),
+             "qty": r[3], "days_left": r[4].days if r[4] is not None else 0}
+            for r in cursor.fetchall()
+        ]
+
+        send_cashcut_report(
+            cut=cut,
+            products_summary=products_summary,
+            expenses_detail=expenses_detail,
+            low_stock=low_stock,
+            expiring=expiring,
+        )
+        send_whatsapp_report(
+            cut=cut,
+            products_summary=products_summary,
+            expenses_detail=expenses_detail,
+            low_stock=low_stock,
+            expiring=expiring,
+        )
+
+        return {"ok": True}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()

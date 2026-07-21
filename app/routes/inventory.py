@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi.responses import StreamingResponse
+import io
 from app.db.connection import get_conn
 from app.core.security.deps import get_current_user
-from app.schemas.inventory_schema import InventoryAdjustmentCreate, InventoryAdjustmentResponse, InventoryNewItemCreate, InventoryNewItemResponse, InventoryRestockCreate,InventoryRestockResponse, InventoryEditCreate, InventoryEditResponse, labListResponse, ProductBatchEditCreate, ProductBatchEditResponse
+from app.schemas.inventory_schema import InventoryAdjustmentCreate, InventoryAdjustmentResponse, InventoryNewItemCreate, InventoryNewItemResponse, InventoryRestockCreate,InventoryRestockResponse, InventoryEditCreate, InventoryEditResponse, labListResponse, ProductBatchCreate, ProductBatchEditCreate, ProductBatchEditResponse
 from decimal import Decimal, ROUND_HALF_UP
 import psycopg2
 
@@ -40,7 +42,7 @@ def normalize_method(method: str) -> str:
 
 #This route is for searching products in the inventory, it allows searching by name, formula or barcode, and also filtering by low stock. It returns a list of products with their details.
 @router.get("/search")
-def search(query: str = "", low_stock: bool = False, current_user: dict = Depends(get_current_user)):
+def search(query: str = "", low_stock: bool = False, offset: int = 0, current_user: dict = Depends(get_current_user)):
     conn = get_conn()
     if conn is None:
         raise HTTPException(
@@ -65,7 +67,8 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
                    COALESCE(p.cost, 0)        AS unit_cost,
                    pr.name, pr.id, bi.section_id,
                    COALESCE(bi.min_stock, 0)  AS min_stock,
-                   p.is_service, p.content
+                   p.is_service, p.content,
+                   COUNT(*) OVER()            AS total_count
             FROM products p
             CROSS JOIN (SELECT location_id FROM boxes WHERE id = %s) AS loc
             LEFT JOIN branch_inventory bi ON bi.product_id = p.id AND bi.location_id = loc.location_id
@@ -84,33 +87,39 @@ def search(query: str = "", low_stock: bool = False, current_user: dict = Depend
         if low_stock:
             sql += " AND COALESCE(bi.stock, 0) <= COALESCE(bi.min_stock, 0)"
 
-        sql += " ORDER BY p.name LIMIT 20"
+        sql += " ORDER BY p.name LIMIT 10 OFFSET %s"
+        params.append(offset)
 
         cursor.execute(sql, params)
         rows = cursor.fetchall()
 
-        return [
-            {
-                "id": row[0],
-                "barcode": row[1],
-                "name": row[2],
-                "formula": row[3],
-                "stock": row[4],
-                "price_sell": str(row[5]),
-                "lab_name": row[6],
-                "section_name": row[7],
-                "method": row[8],
-                "active": row[9],
-                "cost": str(row[10]),
-                "provider_name": row[11],
-                "provider_id": row[12],
-                "section_id": row[13],
-                "min_stock": row[14],
-                "is_service": row[15],
-                "content": row[16],
-            }
-            for row in rows
-        ]
+        total = rows[0][17] if rows else 0
+        return {
+            "items": [
+                {
+                    "id": row[0],
+                    "barcode": row[1],
+                    "name": row[2],
+                    "formula": row[3],
+                    "stock": row[4],
+                    "price_sell": str(row[5]),
+                    "lab_name": row[6],
+                    "section_name": row[7],
+                    "method": row[8],
+                    "active": row[9],
+                    "cost": str(row[10]),
+                    "provider_name": row[11],
+                    "provider_id": row[12],
+                    "section_id": row[13],
+                    "min_stock": row[14],
+                    "is_service": row[15],
+                    "content": row[16],
+                }
+                for row in rows
+            ],
+            "total": total,
+            "offset": offset,
+        }
 
     except psycopg2.Error as e:
         raise HTTPException(
@@ -590,6 +599,48 @@ def edit_inventory(data: InventoryEditCreate, current_user: dict = Depends(get_c
         cursor.close()
         conn.close()
 
+@router.post("/batch")
+def create_batch(data: ProductBatchCreate, current_user: dict = Depends(get_current_user)):
+    conn = get_conn()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")
+    cursor = conn.cursor()
+    try:
+        box_id = current_user["box_id"]
+        if data.qty <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La cantidad debe ser mayor a cero")
+        if not data.lot.strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El lote no puede estar vacío")
+
+        cursor.execute("""
+            SELECT l.id FROM locations l
+            JOIN boxes b ON b.location_id = l.id
+            WHERE b.id = %s
+        """, (box_id,))
+        loc = cursor.fetchone()
+        if not loc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ubicación no encontrada")
+        location_id = loc[0]
+
+        cursor.execute("""
+            INSERT INTO product_batches (product_id, qty, expiration_date, lot, location_id)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id, created_at
+        """, (data.product_id, data.qty, data.expiration_date, data.lot, location_id))
+        row = cursor.fetchone()
+        conn.commit()
+        return {"id": row[0], "product_id": data.product_id, "qty": data.qty,
+                "lot": data.lot, "expiration_date": data.expiration_date, "created_at": str(row[1])}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.put("/batch/{batch_id}", response_model=ProductBatchEditResponse)
 def edit_batch(batch_id: int, data: ProductBatchEditCreate, current_user: dict = Depends(get_current_user)):
     conn = get_conn()
@@ -718,10 +769,11 @@ def search_batches(query: str = "", current_user: dict = Depends(get_current_use
                     p.name ILIKE %s
                     OR p.formula ILIKE %s
                     OR pb.lot ILIKE %s
+                    OR p.barcode ILIKE %s
               )
             ORDER BY pb.created_at DESC
             LIMIT 100
-        """, (box_id, f"%{query}%", f"%{query}%", f"%{query}%"))
+        """, (box_id, f"%{query}%", f"%{query}%", f"%{query}%", f"%{query}%"))
 
         rows = cursor.fetchall()
 
@@ -740,6 +792,114 @@ def search_batches(query: str = "", current_user: dict = Depends(get_current_use
             for row in rows
         ]
 
+    except psycopg2.Error as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error de base de datos: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/export/low-stock")
+def export_low_stock(current_user: dict = Depends(get_current_user)):
+    """Returns an Excel file with all low-stock products for this branch."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    conn = get_conn()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")
+    cursor = conn.cursor()
+    try:
+        box_id = current_user["box_id"]
+        cursor.execute("""
+            SELECT p.name, p.formula, p.lab_name, s.name,
+                   bi.stock, bi.min_stock, bi.price_sell, p.cost
+            FROM branch_inventory bi
+            JOIN products p  ON p.id  = bi.product_id
+            JOIN boxes b     ON b.location_id = bi.location_id
+            LEFT JOIN sections s ON s.id = bi.section_id
+            WHERE b.id = %s AND bi.active = true AND p.is_service = false
+              AND bi.stock <= bi.min_stock
+            ORDER BY (bi.stock::float / NULLIF(bi.min_stock, 0)) ASC
+        """, (box_id,))
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Por Agotarse"
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor="1E3A5F")
+    headers = ["Producto", "Fórmula", "Laboratorio", "Sección", "Stock actual", "Stock mínimo", "Precio venta", "Costo compra"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    warn_fill = PatternFill("solid", fgColor="FEF3C7")
+    danger_fill = PatternFill("solid", fgColor="FEE2E2")
+
+    for r, row in enumerate(rows, 2):
+        stock, min_stock = row[4], row[5]
+        fill = danger_fill if stock == 0 else warn_fill
+        for col, val in enumerate(row, 1):
+            cell = ws.cell(row=r, column=col, value=val)
+            cell.fill = fill
+
+    for col in ws.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=10)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=por_agotarse.xlsx"},
+    )
+
+
+@router.get("/sales-history/{product_id}")
+def sales_history(product_id: int, current_user: dict = Depends(get_current_user)):
+    """Returns the last 50 sales of a product for this branch."""
+    conn = get_conn()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al conectar a la base de datos")
+    cursor = conn.cursor()
+    try:
+        box_id = current_user["box_id"]
+        cursor.execute("""
+            SELECT s.id, s.created_at, si.qty,
+                   si.price, si.discount_amount,
+                   (si.price - si.discount_amount) * si.qty AS line_total,
+                   s.payment_method, u.name
+            FROM sale_items si
+            JOIN sales s ON si.sale_id = s.id
+            JOIN users u ON s.sold_by  = u.id
+            WHERE si.product_id = %s AND s.box_id = %s
+            ORDER BY s.created_at DESC
+            LIMIT 50
+        """, (product_id, box_id))
+        rows = cursor.fetchall()
+        return [
+            {
+                "sale_id":        row[0],
+                "date":           str(row[1]),
+                "qty":            row[2],
+                "unit_price":     str(row[3] or "0.00"),
+                "discount":       str(row[4] or "0.00"),
+                "line_total":     str(row[5] or "0.00"),
+                "payment_method": row[6],
+                "sold_by":        row[7],
+            }
+            for row in rows
+        ]
     except psycopg2.Error as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error de base de datos: {e}")
     finally:

@@ -57,12 +57,14 @@ def _send(subject: str, html: str) -> None:
 # HTML builder
 # ---------------------------------------------------------------------------
 
-def _row(label: str, value: str, bold: bool = False) -> str:
+def _row(label: str, value: str, bold: bool = False, for_pdf: bool = False) -> str:
     weight = "font-weight:700;" if bold else ""
+    pad = "padding:4px 6px;" if for_pdf else "padding:6px 10px;"
+    w1, w2 = (' width="65%"', ' width="35%"') if for_pdf else ("", "")
     return f"""
         <tr>
-            <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;color:#374151;{weight}">{label}</td>
-            <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;text-align:right;{weight}">{value}</td>
+            <td{w1} style="{pad}border-bottom:1px solid #f0f0f0;color:#374151;{weight}">{label}</td>
+            <td{w2} style="{pad}border-bottom:1px solid #f0f0f0;text-align:right;{weight}">{value}</td>
         </tr>"""
 
 def _section(title: str, color: str, body: str) -> str:
@@ -72,77 +74,88 @@ def _section(title: str, color: str, body: str) -> str:
             {body}
         </table>"""
 
-def build_report_html(cut: dict, products: list, expenses: list, low_stock: list, expiring: list) -> str:
+def build_report_html(cut: dict, products: list, expenses: list, low_stock: list, expiring: list, for_pdf: bool = False) -> str:
     # -- Resumen del corte --
     diff     = float(cut["difference"])
     diff_str = f'<span style="color:{"#dc2626" if diff < 0 else "#16a34a"};">{"−" if diff < 0 else "+"} ${abs(diff):,.2f}</span>'
 
+    r = lambda label, value, bold=False: _row(label, value, bold=bold, for_pdf=for_pdf)
+
     summary_rows = (
-        _row("Período", f'{_fmt_ts(cut["from_ts"])} &nbsp;→&nbsp; {_fmt_ts(cut["to_ts"])}')
-        + _row("Ventas brutas", f'${float(cut["total_sales"]):,.2f}')
-        + _row("Devoluciones", f'${float(cut["total_returns"]):,.2f}')
-        + _row("Ventas netas", f'${float(cut["net_total"]):,.2f}', bold=True)
-        + _row("Efectivo ventas", f'${float(cut["total_cash"]):,.2f}')
-        + _row("Tarjeta", f'${float(cut["total_card"]):,.2f}')
-        + _row("Transferencia", f'${float(cut["total_transfer"]):,.2f}')
-        + _row("Gastos", f'${float(cut["total_expenses"]):,.2f}')
-        + _row("Efectivo esperado", f'${float(cut["cash_expected"]):,.2f}')
-        + _row("Efectivo contado", f'${float(cut["cash_counted"]):,.2f}')
-        + _row("Diferencia", diff_str, bold=True)
+        r("Período", f'{_fmt_ts(cut["from_ts"])} -> {_fmt_ts(cut["to_ts"])}')
+        + r("Ventas brutas", f'${float(cut["total_sales"]):,.2f}')
+        + r("Devoluciones", f'${float(cut["total_returns"]):,.2f}')
+        + r("Ventas netas", f'${float(cut["net_total"]):,.2f}', bold=True)
+        + r("Efectivo ventas", f'${float(cut["total_cash"]):,.2f}')
+        + r("Tarjeta", f'${float(cut["total_card"]):,.2f}')
+        + r("Transferencia", f'${float(cut["total_transfer"]):,.2f}')
+        + r("Gastos", f'${float(cut["total_expenses"]):,.2f}')
+        + r("Efectivo esperado", f'${float(cut["cash_expected"]):,.2f}')
+        + r("Efectivo contado", f'${float(cut["cash_counted"]):,.2f}')
+        + r("Diferencia", diff_str, bold=True)
     )
     if cut.get("comment"):
-        summary_rows += _row("Comentario", cut["comment"])
+        summary_rows += r("Comentario", cut["comment"])
 
     summary_section = _section("Resumen del Corte", "#2563eb", summary_rows)
 
     # -- Artículos vendidos --
     if products:
         prod_rows = "".join(
-            _row(p["description"], f'{p["quantity"]} pzas — ${float(p["total"]):,.2f}')
+            r(p["description"], f'{p["quantity"]} pzas - ${float(p["total"]):,.2f}')
             for p in products
         )
     else:
-        prod_rows = _row("Sin ventas en este período", "")
-    products_section = _section("Artículos Vendidos", "#7c3aed", prod_rows)
+        prod_rows = r("Sin ventas en este período", "")
+    products_section = _section("Articulos Vendidos", "#7c3aed", prod_rows)
 
     # -- Gastos --
     if expenses:
         exp_rows = "".join(
-            _row(f'{e["description"] or e["expense_type"] or "Gasto"}', f'${float(e["amount"]):,.2f}')
+            r(f'{e["description"] or e["expense_type"] or "Gasto"}', f'${float(e["amount"]):,.2f}')
             for e in expenses
         )
     else:
-        exp_rows = _row("Sin gastos en este período", "")
-    expenses_section = _section("Gastos del Período", "#d97706", exp_rows)
+        exp_rows = r("Sin gastos en este período", "")
+    expenses_section = _section("Gastos del Periodo", "#d97706", exp_rows)
 
     # -- Por agotarse --
     if low_stock:
         ls_rows = "".join(
-            _row(
-                p["name"],
-                f'<span style="color:#dc2626;font-weight:700;">{p["stock"]} / {p["min_stock"]}</span>'
-            )
+            r(p["name"], f'{p["stock"]} / {p["min_stock"]}')
             for p in low_stock
         )
     else:
-        ls_rows = _row("Sin productos por agotarse", "")
+        ls_rows = r("Sin productos por agotarse", "")
     low_section = _section("Productos por Agotarse", "#dc2626", ls_rows)
 
     # -- Próximos a caducar --
     def _expiry_badge(e: dict) -> str:
         days  = e["days_left"]
-        color = "#dc2626" if days <= 15 else "#d97706"
         label = "VENCIDO" if days <= 0 else f"{days}d"
-        return f'<span style="color:{color};font-weight:700;">{label}</span>'
+        return label
 
     if expiring:
         exp2_rows = "".join(
-            _row(f'{e["name"]} — Lote {e["lot"]} ({e["qty"]} pzas)', _expiry_badge(e))
+            r(f'{e["name"]} - Lote {e["lot"]} ({e["qty"]} pzas)', _expiry_badge(e))
             for e in expiring
         )
     else:
-        exp2_rows = _row("Sin lotes próximos a vencer", "")
-    expiry_section = _section("Próximos a Caducar (60 días)", "#ea580c", exp2_rows)
+        exp2_rows = r("Sin lotes proximos a vencer", "")
+    expiry_section = _section("Proximos a Caducar (60 dias)", "#ea580c", exp2_rows)
+
+    if for_pdf:
+        return f"""<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"></head>
+<body style="margin:20px;font-family:Arial,sans-serif;font-size:11px;color:#111827;">
+  <h1 style="margin:0 0 4px;font-size:16px;color:#1e3a5f;">Farmaquin</h1>
+  <p style="margin:0 0 16px;font-size:11px;color:#6b7280;">Reporte de Corte de Caja — {cut["to_ts"][:10]}</p>
+  {summary_section}
+  {products_section}
+  {expenses_section}
+  {low_section}
+  {expiry_section}
+</body></html>"""
 
     return f"""<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>

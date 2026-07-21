@@ -11,3 +11,4 @@ requests
 Pillow
 python-jose[cryptography]
 xhtml2pdf
+openpyxl
