@@ -53,7 +53,7 @@ def get_alerts(current_user: dict = Depends(get_current_user)):
                 "lot":  r[1],
                 "expiration_date": str(r[2]),
                 "qty":  r[3],
-                "days_left": r[4].days if r[4] is not None else 0,
+                "days_left": r[4] if r[4] is not None else 0,
             }
             for r in cursor.fetchall()
         ]

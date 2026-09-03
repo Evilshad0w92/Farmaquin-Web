@@ -356,7 +356,7 @@ def close_cashcut(data: CashcutClose, current_user: dict = Depends(get_current_u
         """, (current_user["box_id"],))
         expiring = [
             {"name": r[0], "lot": r[1], "expiration_date": str(r[2]),
-             "qty": r[3], "days_left": r[4].days if r[4] is not None else 0}
+             "qty": r[3], "days_left": r[4] if r[4] is not None else 0}
             for r in cursor.fetchall()
         ]
 
@@ -545,7 +545,7 @@ def resend_report(cut_id: int, current_user: dict = Depends(get_current_user)):
         """, (box_id,))
         expiring = [
             {"name": r[0], "lot": r[1], "expiration_date": str(r[2]),
-             "qty": r[3], "days_left": r[4].days if r[4] is not None else 0}
+             "qty": r[3], "days_left": r[4] if r[4] is not None else 0}
             for r in cursor.fetchall()
         ]
 
